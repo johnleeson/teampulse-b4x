@@ -1,0 +1,10 @@
+Objects/
+AutoBackups/
+*.apk
+*.dex
+google-services.json
+.idea/
+*.iml
+__pycache__/
+.env
+.env.local

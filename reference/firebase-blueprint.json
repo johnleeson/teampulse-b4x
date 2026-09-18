@@ -1,0 +1,116 @@
+{
+  "entities": {
+    "Profile": {
+      "title": "Profile",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "avatar": { "type": "string" },
+        "roles": { "type": "array", "items": { "type": "string" } },
+        "age": { "type": "string" },
+        "gender": { "type": "string" },
+        "favPosition": { "type": "string" },
+        "kitSize": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "Club": {
+      "title": "Club",
+      "description": "Sports club information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "logo": { "type": "string" },
+        "description": { "type": "string" },
+        "type": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "inviteCode": { "type": "string" },
+        "ageGroup": { "type": "string" },
+        "gender": { "type": "string" },
+        "teamPhoto": { "type": "string" }
+      },
+      "required": ["id", "name", "ownerId", "inviteCode"]
+    },
+    "ClubMember": {
+      "title": "ClubMember",
+      "description": "Membership mapping between users and clubs",
+      "type": "object",
+      "properties": {
+        "clubId": { "type": "string" },
+        "userId": { "type": "string" },
+        "roles": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["clubId", "userId", "roles"]
+    },
+    "Match": {
+      "title": "Match",
+      "description": "Match event details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "clubId": { "type": "string" },
+        "title": { "type": "string" },
+        "date": { "type": "string" },
+        "meetTime": { "type": "string" },
+        "kickOffTime": { "type": "string" },
+        "location": { "type": "string" },
+        "status": { "type": "string" },
+        "scoreA": { "type": "number" },
+        "scoreB": { "type": "number" },
+        "teamA": { "type": "array", "items": { "type": "string" } },
+        "teamB": { "type": "array", "items": { "type": "string" } },
+        "playerStats": { "type": "object" },
+        "signedUpPlayerIds": { "type": "array", "items": { "type": "string" } },
+        "availability": { "type": "object" },
+        "opponentName": { "type": "string" },
+        "isHome": { "type": "boolean" },
+        "potmVotes": { "type": "object" },
+        "aiSummary": { "type": "string" },
+        "managerSummary": { "type": "string" }
+      },
+      "required": ["id", "clubId", "title", "date", "status"]
+    },
+    "FeedEvent": {
+      "title": "FeedEvent",
+      "description": "Live feed events for a match",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "matchId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "type": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "content": { "type": "string" },
+        "details": { "type": "object" },
+        "mediaUrl": { "type": "string" }
+      },
+      "required": ["id", "matchId", "userId", "type", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/profiles/{profileId}": {
+      "schema": "Profile",
+      "description": "User profiles"
+    },
+    "/clubs/{clubId}": {
+      "schema": "Club",
+      "description": "Clubs collection"
+    },
+    "/club_members/{memberId}": {
+      "schema": "ClubMember",
+      "description": "Club membership mapping"
+    },
+    "/matches/{matchId}": {
+      "schema": "Match",
+      "description": "Matches collection"
+    },
+    "/feed_events/{eventId}": {
+      "schema": "FeedEvent",
+      "description": "Live feed events"
+    }
+  }
+}
