@@ -1,42 +1,39 @@
 # TeamPulse (B4X)
 
-Native **B4A / B4XPages** rewrite of the TeamPulse web app (Google AI Studio export). Same Firebase project and Firestore document shapes so the web and Android clients can share data.
+Native **B4A / B4XPages** client for TeamPulse, based on [johnleeson/teampulse-app](https://github.com/johnleeson/teampulse-app) (React + Capacitor + **Supabase**).
 
-**Not an import** — layouts and logic are rebuilt in B4X. AI / Gemini features from the web app are intentionally omitted. **Stats are included.**
+**This repo (`teampulse-b4x`) is the B4X app only.** The web/Capacitor repo is reference material — keep it unchanged; copies live under [`reference/`](reference/).
+
+Layouts and logic are rebuilt in B4X (not an import). Gemini / AI features from the web app are omitted. **Stats are included.**
 
 ## What’s in this repo
 
 | Path | Purpose |
 |------|---------|
-| [`TeamPulse/`](TeamPulse/) | B4A project (open `TeamPulse.b4a` in B4A) |
-| [`docs/SCHEMA.md`](docs/SCHEMA.md) | Firestore collections & fields |
-| [`docs/B4A_SETUP.md`](docs/B4A_SETUP.md) | IDE, Firebase, named database notes |
-| [`reference/`](reference/) | Original web types, `dbService`, blueprint, zip |
+| [`TeamPulse/`](TeamPulse/) | B4XPages project (open `TeamPulse/B4A/TeamPulse.b4a`) |
+| [`docs/SCHEMA.md`](docs/SCHEMA.md) | Supabase tables & fields |
+| [`docs/B4A_SETUP.md`](docs/B4A_SETUP.md) | IDE + Supabase setup |
+| [`reference/`](reference/) | Snapshot of teampulse-app types, services, SQL, components |
 
 ## Features (v1)
 
-- Email/password login (+ Google Sign-In hook)
-- Clubs (TEAM / SOCIAL), invite codes, members/roles
-- Matches, availability, formation pitch, tactical lineup
-- Substitution planner (ported from web)
+- Email/password login (Supabase Auth)
+- Clubs (TEAM / SOCIAL), invite codes, members/roles (incl. COACH)
+- Matches, availability, formation pitch, lineup map
+- Substitution planner
 - Live feed: score, goals, subs, cards, HT/FT
 - Stats: W/D/L, GF/GA, player goals/assists/apps/cards/POTM
 
 ## Open in B4A
 
 1. Install [B4A](https://www.b4x.com/b4a.html) with Android SDK and **B4XPages**.
-2. Enable Firebase libraries (FirebaseAuth, FirebaseAnalytics) and place `google-services.json` in `TeamPulse/Files/` (see setup doc).
-3. Open `TeamPulse/TeamPulse.b4a`, resolve libraries, compile to device/emulator.
+2. Confirm `SUPABASE_URL` / `SUPABASE_ANON_KEY` in `TeamPulse/modConfig.bas`.
+3. Open **`TeamPulse/B4A/TeamPulse.b4a`**, enable **JSON** + **JavaObject**, compile.
 
-This cloud environment **cannot compile B4X**; develop and run on Windows with B4A.
+## Backend
 
-## Firebase
-
-- Project: `gen-lang-client-0447702787`
-- **Named Firestore DB** (required): `ai-studio-5af61b00-360c-4924-838f-431be734b14d`
-- Auth: Email/Password + Google (enable both in console; add Android SHA-1 for Google)
-
-Config constants live in [`TeamPulse/modConfig.bas`](TeamPulse/modConfig.bas).
+- Supabase project shared with teampulse-app (see `reference/lib/supabase.ts`)
+- Data access: PostgREST + Auth HTTP from `modSupabase` / `modDb` / `modAuth`
 
 ## Module map
 
@@ -46,4 +43,6 @@ Login → Dashboard → Clubs / Matches / Stats
 Matches → MatchPrep (lineup + sub plan) → LiveFeed
 ```
 
-Shared: `modFirebase`, `modAuth`, `modDb`, `modFormations`, `modSubPlanner`, `modStats`, `modAppState`.
+Shared: `modSupabase`, `modAuth`, `modDb`, `modFormations`, `modSubPlanner`, `modStats`, `modAppState`.
+
+Dashboard / LiveFeed poll Supabase every 10–15s while the page is visible (lightweight realtime stand-in).

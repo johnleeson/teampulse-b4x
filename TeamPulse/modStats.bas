@@ -1,4 +1,4 @@
-B4A=true
+﻿B4A=true
 Group=Default Group
 ModulesStructureVersion=1
 Type=StaticCode
@@ -114,29 +114,39 @@ Public Sub Compute(club As Map, matches As List, events As List, selectedMatchId
 			End If
 		Next
 		
-		' POTM: most votes wins
-		Dim potmVotes As Map = m.GetDefault("potmVotes", EmptyMap)
-		If potmVotes.Size > 0 Then
-			Dim counts As Map
-			counts.Initialize
-			For Each voter As String In potmVotes.Keys
-				Dim votedId As String = potmVotes.Get(voter)
-				counts.Put(votedId, counts.GetDefault(votedId, 0) + 1)
-			Next
-			Dim winnerId As String = ""
-			Dim best As Int = -1
-			For Each cand As String In counts.Keys
-				Dim c As Int = counts.Get(cand)
-				If c > best Then
-					best = c
-					winnerId = cand
-				End If
-			Next
-			If winnerId <> "" And playerStats.ContainsKey(winnerId) Then
-				Dim pw As Map = playerStats.Get(winnerId)
-				pw.Put("potmWins", pw.GetDefault("potmWins", 0) + 1)
+		' POTM awards: coach / opposition category picks + fanCounts tallies
+		Dim potmVotes As Map = modDb.NormalizePotmVotes(m.GetDefault("potmVotes", EmptyMap))
+		AwardPotm(playerStats, modDb.GetCategoryPotmPlayerId(potmVotes, "coach"))
+		AwardPotm(playerStats, modDb.GetCategoryPotmPlayerId(potmVotes, "opposition"))
+		Dim fanCounts As Map
+		Dim fcObj As Object = potmVotes.GetDefault("fanCounts", Null)
+		If fcObj <> Null And fcObj Is Map Then
+			fanCounts = fcObj
+		Else
+			fanCounts.Initialize
+		End If
+		If fanCounts.Size = 0 Then
+			' Fall back to counting fans ballots
+			Dim fansBucket As Map
+			Dim fObj As Object = potmVotes.GetDefault("fans", Null)
+			If fObj <> Null And fObj Is Map Then
+				fansBucket = fObj
+				For Each voter As String In fansBucket.Keys
+					Dim votedId As String = fansBucket.Get(voter)
+					fanCounts.Put(votedId, fanCounts.GetDefault(votedId, 0) + 1)
+				Next
 			End If
 		End If
+		Dim winnerId As String = ""
+		Dim best As Int = -1
+		For Each cand As String In fanCounts.Keys
+			Dim c As Int = fanCounts.Get(cand)
+			If c > best Then
+				best = c
+				winnerId = cand
+			End If
+		Next
+		If best > 0 Then AwardPotm(playerStats, winnerId)
 	Next
 	
 	' Event-based goals/assists/cards for selected matches
@@ -194,6 +204,12 @@ Public Sub Compute(club As Map, matches As List, events As List, selectedMatchId
 	out.Put("played", clubMatches.Size)
 	out.Put("players", players)
 	Return out
+End Sub
+
+Private Sub AwardPotm(playerStats As Map, playerId As String)
+	If playerId = "" Or playerStats.ContainsKey(playerId) = False Then Return
+	Dim pw As Map = playerStats.Get(playerId)
+	pw.Put("potmWins", pw.GetDefault("potmWins", 0) + 1)
 End Sub
 
 Private Sub ApplyResultToTeam(team As List, playerStats As Map, myScore As Int, theirScore As Int)

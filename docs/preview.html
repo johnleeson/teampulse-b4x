@@ -73,7 +73,7 @@
 </head>
 <body>
   <h1>TeamPulse</h1>
-  <p class="lead">B4XPages Android rewrite mapped from the AI Studio web export. Same Firestore schema; Stats included; Gemini/AI excluded. Open <code>TeamPulse/TeamPulse.b4a</code> in B4A to compile.</p>
+  <p class="lead">B4XPages Android client based on <code>teampulse-app</code> (Supabase). Stats included; Gemini/AI excluded. Open <code>TeamPulse/B4A/TeamPulse.b4a</code> in B4A to compile.</p>
   <div class="grid">
     <section class="pitch" aria-label="Formation preview">
       <div class="pos">ST</div><div class="pos">ST</div>
@@ -84,7 +84,7 @@
     <section>
       <h2>Pages</h2>
       <ul>
-        <li>Login (email + Google hook)</li>
+        <li>Login (email/password)</li>
         <li>Dashboard</li>
         <li>Clubs / ClubMembers</li>
         <li>Matches / MatchPrep</li>
@@ -95,7 +95,7 @@
     <section>
       <h2>Shared modules</h2>
       <ul>
-        <li><code>modFirebase</code> named DB</li>
+        <li><code>modSupabase</code> Auth + REST</li>
         <li><code>modDb</code> CRUD port</li>
         <li><code>modFormations</code></li>
         <li><code>modSubPlanner</code></li>
@@ -105,7 +105,7 @@
     <section>
       <h2>Backend</h2>
       <ul>
-        <li>Firestore named DB</li>
+        <li>Supabase (Postgres + Auth)</li>
         <li>profiles · clubs · club_members</li>
         <li>matches · feed_events</li>
         <li>No Gemini / AI summaries</li>

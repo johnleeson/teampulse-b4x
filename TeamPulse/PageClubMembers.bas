@@ -1,4 +1,4 @@
-B4A=true
+﻿B4A=true
 Group=Default Group
 ModulesStructureVersion=1
 Type=Class
@@ -16,7 +16,6 @@ End Sub
 
 Private Sub B4XPage_Created (Root1 As B4XView)
 	Root = Root1
-	Root.Color = 0xFFF8FAFC
 	BuildUI
 End Sub
 
@@ -25,19 +24,10 @@ Private Sub B4XPage_Appear
 End Sub
 
 Private Sub BuildUI
-	lblTitle.Initialize("")
-	lblTitle.TextSize = 20
-	lblTitle.Typeface = Typeface.DEFAULT_BOLD
-	lblTitle.TextColor = modConfig.COLOR_PRIMARY
-	Root.AddView(lblTitle, 16dip, 24dip, Root.Width - 100dip, 40dip)
+	Dim chrome As Map = modUI.AddPageChrome(Root, "Roster", "btnBack", "", "", False)
+	lblTitle = chrome.Get("TitleLabel")
 	
-	Dim btnBack As Button
-	btnBack.Initialize("btnBack")
-	btnBack.Text = "Back"
-	Root.AddView(btnBack, Root.Width - 88dip, 24dip, 72dip, 40dip)
-	
-	clv.Initialize(Me, "clv")
-	Root.AddView(clv.AsView, 0, 72dip, Root.Width, Root.Height - 200dip)
+	clv = modUI.AddCustomListView(Root, 0, 56dip, Root.Width, Root.Height - 180dip, Me, "clv")
 	
 	edtPlayerName.Initialize("")
 	edtPlayerName.Hint = "Add player name"
@@ -75,8 +65,8 @@ Public Sub Refresh
 			roleStr = roleStr & r
 		Next
 		Dim line As String = m.GetDefault("name", "Player") & CRLF & roleStr & _
-			" · pos " & m.GetDefault("favPosition", "-") & " · kit " & m.GetDefault("kitSize", "-") & _
-			" · rating " & m.GetDefault("abilityRating", 0)
+			" · pos " & m.GetDefault("preferredPosition", m.GetDefault("favPosition", "-")) & _
+			" · #" & m.GetDefault("squadNumber", "-")
 		clv.AddTextItem(line, m.Get("id"))
 	Next
 End Sub
