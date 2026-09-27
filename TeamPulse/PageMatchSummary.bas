@@ -16,20 +16,25 @@ Sub Class_Globals
 	Private lblCoachPotm As Label
 	Private lblOppPotm As Label
 	Private potm As Map
-	Private coachPotmId As String
-	Private oppPotmId As String
+	Private coachPotmIds As List
+	Private oppPotmIds As List
 	Private voteEdits As Map
 	Private memberNames As List
 	Private memberIds As List
+	Private memberAvatars As Map
 	Private dialog As B4XDialog
+	Private potmPickIds As Map
+	Private potmPickHost As Panel
 End Sub
 
 Public Sub Initialize
 	voteEdits.Initialize
 	memberNames.Initialize
 	memberIds.Initialize
-	coachPotmId = ""
-	oppPotmId = ""
+	memberAvatars.Initialize
+	coachPotmIds.Initialize
+	oppPotmIds.Initialize
+	potmPickIds.Initialize
 End Sub
 
 Private Sub B4XPage_Created (Root1 As B4XView)
@@ -56,10 +61,11 @@ Private Sub Load
 	match = modAppState.FindMatch(modAppState.SelectedMatchId)
 	club = modAppState.FindClub(match.GetDefault("clubId", ""))
 	potm = modDb.NormalizePotmVotes(match.GetDefault("potmVotes", Null))
-	coachPotmId = modDb.GetCategoryPotmPlayerId(potm, "coach")
-	oppPotmId = modDb.GetCategoryPotmPlayerId(potm, "opposition")
+	coachPotmIds = modDb.GetCategoryPotmPlayerIds(potm, "coach")
+	oppPotmIds = modDb.GetCategoryPotmPlayerIds(potm, "opposition")
 	memberNames.Initialize
 	memberIds.Initialize
+	memberAvatars.Initialize
 	Dim members As List
 	Dim memObj As Object = club.GetDefault("members", Null)
 	If memObj <> Null And memObj Is List Then
@@ -72,6 +78,7 @@ Private Sub Load
 		Dim mem As Map = members.Get(i)
 		memberNames.Add(mem.GetDefault("name", "?"))
 		memberIds.Add(mem.GetDefault("id", ""))
+		memberAvatars.Put(mem.GetDefault("id", ""), mem.GetDefault("avatar", ""))
 	Next
 End Sub
 
@@ -82,6 +89,18 @@ Private Sub NameOf(playerId As String) As String
 		If memberIds.Get(i) = playerId Then Return memberNames.Get(i)
 	Next
 	Return "Unknown"
+End Sub
+
+Private Sub NamesOf(ids As List) As String
+	If ids.IsInitialized = False Or ids.Size = 0 Then Return "Not set"
+	Dim sb As StringBuilder
+	sb.Initialize
+	Dim i As Int
+	For i = 0 To ids.Size - 1
+		If i > 0 Then sb.Append(" & ")
+		sb.Append(NameOf(ids.Get(i)))
+	Next
+	Return sb.ToString
 End Sub
 
 Private Sub BuildForm
@@ -109,11 +128,12 @@ Private Sub BuildForm
 	
 	y = AddSectionLabel(y, "COACH'S PLAYER OF THE MATCH")
 	lblCoachPotm.Initialize("")
-	lblCoachPotm.Text = NameOf(coachPotmId)
+	lblCoachPotm.Text = NamesOf(coachPotmIds)
 	lblCoachPotm.TextSize = 15
 	lblCoachPotm.TextColor = modConfig.COLOR_DARK_TEXT
 	lblCoachPotm.Typeface = Typeface.DEFAULT_BOLD
-	content.AddView(lblCoachPotm, 16dip, y, w - 100dip, 40dip)
+	lblCoachPotm.SingleLine = False
+	content.AddView(lblCoachPotm, 16dip, y, w - 100dip, 48dip)
 	Dim btnCoach As Button
 	btnCoach.Initialize("btnPickCoach")
 	btnCoach.Text = "Pick"
@@ -124,11 +144,12 @@ Private Sub BuildForm
 	
 	y = AddSectionLabel(y, "OPPOSITION PLAYER OF THE MATCH")
 	lblOppPotm.Initialize("")
-	lblOppPotm.Text = NameOf(oppPotmId)
+	lblOppPotm.Text = NamesOf(oppPotmIds)
 	lblOppPotm.TextSize = 15
 	lblOppPotm.TextColor = modConfig.COLOR_DARK_TEXT
 	lblOppPotm.Typeface = Typeface.DEFAULT_BOLD
-	content.AddView(lblOppPotm, 16dip, y, w - 100dip, 40dip)
+	lblOppPotm.SingleLine = False
+	content.AddView(lblOppPotm, 16dip, y, w - 100dip, 48dip)
 	Dim btnOpp As Button
 	btnOpp.Initialize("btnPickOpp")
 	btnOpp.Text = "Pick"
@@ -196,44 +217,122 @@ Private Sub AddSectionLabel(y As Int, text As String) As Int
 	Return y + 22dip
 End Sub
 
-Private Sub PickPlayer(title As String) As ResumableSub
-	If memberNames.Size = 0 Then Return ""
-	Dim template As B4XListTemplate
-	template.Initialize
-	Try
-		template.CustomListView1.DefaultTextColor = modConfig.COLOR_PRIMARY
-	Catch
-		Log("ListTemplate colors: " & LastException.Message)
-	End Try
-	Dim opts As List
-	opts.Initialize
-	opts.Add("(none)")
-	Dim i As Int
-	For i = 0 To memberNames.Size - 1
-		opts.Add(memberNames.Get(i))
-	Next
-	template.Options = opts
-	dialog.Title = title
-	Wait For (dialog.ShowTemplate(template, "OK", "", "Cancel")) Complete (Result As Int)
-	If Result <> xui.DialogResponse_Positive Then Return ""
-	Dim sel As String = template.SelectedItem
-	If sel = "" Or sel = "(none)" Then Return ""
-	For i = 0 To memberNames.Size - 1
-		If memberNames.Get(i) = sel Then Return memberIds.Get(i)
-	Next
-	Return ""
-End Sub
-
 Private Sub btnPickCoach_Click
-	Wait For (PickPlayer("Coach's POTM")) Complete (pid As String)
-	coachPotmId = pid
-	lblCoachPotm.Text = NameOf(coachPotmId)
+	Wait For (PickPlayers("Coach's POTM", coachPotmIds)) Complete (ids As List)
+	coachPotmIds = ids
+	lblCoachPotm.Text = NamesOf(coachPotmIds)
 End Sub
 
 Private Sub btnPickOpp_Click
-	Wait For (PickPlayer("Opposition POTM")) Complete (pid As String)
-	oppPotmId = pid
-	lblOppPotm.Text = NameOf(oppPotmId)
+	Wait For (PickPlayers("Opposition POTM", oppPotmIds)) Complete (ids As List)
+	oppPotmIds = ids
+	lblOppPotm.Text = NamesOf(oppPotmIds)
+End Sub
+
+Private Sub PickPlayers(title As String, current As List) As ResumableSub
+	potmPickIds.Initialize
+	Dim i As Int
+	If current.IsInitialized Then
+		For i = 0 To current.Size - 1
+			Dim existing As String = "" & current.Get(i)
+			If existing <> "" Then potmPickIds.Put(existing, True)
+		Next
+	End If
+	Dim pnl As B4XView = xui.CreatePanel("")
+	pnl.SetLayoutAnimated(0, 0, 0, 320dip, 420dip)
+	pnl.Color = modConfig.COLOR_DARK_BG
+	Dim hint As Label
+	hint.Initialize("")
+	hint.Text = "Tap everyone who shared it, then Done."
+	hint.TextColor = modConfig.COLOR_DARK_MUTED
+	hint.TextSize = 12
+	pnl.AddView(hint, 8dip, 4dip, 304dip, 28dip)
+	Dim sv As ScrollView
+	sv.Initialize(800dip)
+	pnl.AddView(sv, 0, 36dip, 320dip, 376dip)
+	potmPickHost = sv.Panel
+	potmPickHost.Color = modConfig.COLOR_DARK_BG
+	DrawPotmGrid
+	dialog.Title = title
+	Wait For (dialog.ShowCustom(pnl, "Done", "", "Cancel")) Complete (Result As Int)
+	Dim chosen As List
+	chosen.Initialize
+	If Result = xui.DialogResponse_Positive Then
+		For Each pid As String In potmPickIds.Keys
+			chosen.Add(pid)
+		Next
+	Else If current.IsInitialized Then
+		For i = 0 To current.Size - 1
+			chosen.Add(current.Get(i))
+		Next
+	End If
+	Return chosen
+End Sub
+
+Private Sub DrawPotmGrid
+	If potmPickHost.IsInitialized = False Then Return
+	potmPickHost.RemoveAllViews
+	Dim cols As Int = 3
+	Dim size As Int = 72dip
+	Dim cellW As Int = 320dip / cols
+	Dim rowH As Int = size + 22dip
+	Dim col As Int = 0
+	Dim row As Int = 0
+	Dim i As Int
+	For i = 0 To memberIds.Size - 1
+		Dim pid As String = memberIds.Get(i)
+		Dim tag As Map
+		tag.Initialize
+		tag.Put("id", pid)
+		Dim slot As Map = modUI.CreateRoundPlayerSlot("potmSpot", tag, size, memberNames.Get(i), memberAvatars.GetDefault(pid, ""), "", potmPickIds.ContainsKey(pid))
+		Dim spot As Panel = slot.Get("panel")
+		potmPickHost.AddView(spot, col * cellW + 8dip, row * rowH + 4dip, size + 16dip, size + 18dip)
+		If slot.ContainsKey("imageView") Then
+			Dim iv As ImageView = slot.Get("imageView")
+			If iv.IsInitialized Then CallSubDelayed3(Me, "LoadPotmAvatar", iv, memberAvatars.GetDefault(pid, ""))
+		End If
+		col = col + 1
+		If col >= cols Then
+			col = 0
+			row = row + 1
+		End If
+	Next
+	Dim rows As Int = row
+	If col > 0 Then rows = rows + 1
+	potmPickHost.Height = rows * rowH + 12dip
+End Sub
+
+Private Sub LoadPotmAvatar(iv As ImageView, url As String)
+	If url = "" Then Return
+	Dim j As HttpJob
+	j.Initialize("", Me)
+	j.Download(url)
+	Wait For (j) JobDone (job As HttpJob)
+	If job.Success Then
+		Try
+			Dim bmp As Bitmap = job.GetBitmap
+			If bmp <> Null And bmp.IsInitialized Then
+				iv.Bitmap = bmp
+				iv.Gravity = Gravity.FILL
+			End If
+		Catch
+			Log("POTM avatar: " & LastException.Message)
+		End Try
+	End If
+	job.Release
+End Sub
+
+Private Sub potmSpot_Click
+	Dim pnl As Panel = Sender
+	Dim tag As Map = pnl.Tag
+	Dim pid As String = tag.GetDefault("id", "")
+	If pid = "" Then Return
+	If potmPickIds.ContainsKey(pid) Then
+		potmPickIds.Remove(pid)
+	Else
+		potmPickIds.Put(pid, True)
+	End If
+	DrawPotmGrid
 End Sub
 
 Private Sub CollectFanCounts As Map
@@ -255,8 +354,8 @@ End Sub
 
 Private Sub btnSave_Click
 	match.Put("aiSummary", edtSummary.Text.Trim)
-	modDb.SetCategoryPotmPlayerId(potm, "coach", coachPotmId)
-	modDb.SetCategoryPotmPlayerId(potm, "opposition", oppPotmId)
+	modDb.SetCategoryPotmPlayerIds(potm, "coach", coachPotmIds)
+	modDb.SetCategoryPotmPlayerIds(potm, "opposition", oppPotmIds)
 	potm.Put("fanCounts", CollectFanCounts)
 	match.Put("potmVotes", potm)
 	modDb.SaveMatch(match)

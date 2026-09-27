@@ -13,6 +13,7 @@ Sub Process_Globals
 	Public Const TBL_MEMBERS As String = "club_members"
 	Public Const TBL_MATCHES As String = "matches"
 	Public Const TBL_EVENTS As String = "feed_events"
+	Public Const TBL_TRAINING As String = "training_sessions"
 End Sub
 
 Public Sub MapProfile(row As Map) As Map
@@ -136,10 +137,59 @@ Public Sub GetCategoryPotmPlayerId(potm As Map, category As String) As String
 End Sub
 
 Public Sub SetCategoryPotmPlayerId(potm As Map, category As String, playerId As String)
+	Dim ids As List
+	ids.Initialize
+	If playerId <> "" Then ids.Add(playerId)
+	SetCategoryPotmPlayerIds(potm, category, ids)
+End Sub
+
+Public Sub GetCategoryPotmPlayerIds(potm As Map, category As String) As List
+	Dim out As List
+	out.Initialize
+	Dim bObj As Object = potm.GetDefault(category, Null)
+	If bObj = Null Or (bObj Is Map) = False Then Return out
+	Dim bucket As Map = bObj
+	Dim seen As Map
+	seen.Initialize
+	For Each k As String In bucket.Keys
+		Dim v As String = "" & bucket.Get(k)
+		If v <> "" And v <> "null" And seen.ContainsKey(v) = False Then
+			seen.Put(v, True)
+			out.Add(v)
+		End If
+	Next
+	Return out
+End Sub
+
+Public Sub SetCategoryPotmPlayerIds(potm As Map, category As String, playerIds As List)
 	Dim bucket As Map
 	bucket.Initialize
-	If playerId <> "" Then bucket.Put("club", playerId)
+	If playerIds.IsInitialized Then
+		Dim i As Int
+		For i = 0 To playerIds.Size - 1
+			Dim pid As String = "" & playerIds.Get(i)
+			If pid <> "" Then bucket.Put(pid, pid)
+		Next
+	End If
 	potm.Put(category, bucket)
+End Sub
+
+Public Sub MapTraining(row As Map) As Map
+	Dim m As Map
+	m.Initialize
+	m.Put("id", row.GetDefault("id", ""))
+	m.Put("clubId", row.GetDefault("club_id", ""))
+	m.Put("date", NormalizeIsoDate(row.GetDefault("session_date", "")))
+	Dim trainer As String = ""
+	Dim trainerObj As Object = row.GetDefault("trainer_of_week_id", "")
+	If trainerObj <> Null Then trainer = trainerObj
+	If trainer = "null" Then trainer = ""
+	m.Put("trainerOfWeekId", trainer)
+	m.Put("presentIds", AsIdList(row.GetDefault("present_ids", Null)))
+	m.Put("absentIds", AsIdList(row.GetDefault("absent_ids", Null)))
+	m.Put("wellBehavedIds", AsIdList(row.GetDefault("well_behaved_ids", Null)))
+	m.Put("poorlyBehavedIds", AsIdList(row.GetDefault("poorly_behaved_ids", Null)))
+	Return m
 End Sub
 
 Public Sub MapEvent(row As Map) As Map
@@ -196,6 +246,29 @@ Private Sub IsoTimestamp(ms As Long) As String
 	End Try
 End Sub
 
+Private Sub NormalizeIsoDate(v As Object) As String
+	Dim s As String = "" & v
+	If s = "null" Then Return ""
+	Dim ti As Int = s.IndexOf("T")
+	If ti > 0 Then s = s.SubString2(0, ti)
+	Dim si As Int = s.IndexOf(" ")
+	If si > 0 Then s = s.SubString2(0, si)
+	Return s
+End Sub
+
+Private Sub AsIdList(raw As Object) As List
+	Dim out As List
+	out.Initialize
+	If raw = Null Or (raw Is List) = False Then Return out
+	Dim src As List = raw
+	Dim i As Int
+	For i = 0 To src.Size - 1
+		Dim id As String = "" & src.Get(i)
+		If id <> "" And id <> "null" Then out.Add(id)
+	Next
+	Return out
+End Sub
+
 Private Sub EmptyList As List
 	Dim l As List
 	l.Initialize
@@ -234,14 +307,66 @@ Public Sub SaveProfile(user As Map)
 	payload.Put("name", user.GetDefault("name", ""))
 	payload.Put("avatar", user.GetDefault("avatar", ""))
 	payload.Put("roles", user.GetDefault("roles", EmptyList))
-	payload.Put("squad_number", user.GetDefault("squadNumber", Null))
-	payload.Put("preferred_position", NullIfEmpty(user.GetDefault("preferredPosition", user.GetDefault("favPosition", ""))))
-	payload.Put("secondary_position", NullIfEmpty(user.GetDefault("secondaryPosition", "")))
-	payload.Put("phone", NullIfEmpty(user.GetDefault("phone", "")))
-	payload.Put("emergency_contact", NullIfEmpty(user.GetDefault("emergencyContact", "")))
-	payload.Put("date_of_birth", NullIfEmpty(user.GetDefault("dateOfBirth", "")))
-	payload.Put("medical_notes", NullIfEmpty(user.GetDefault("medicalNotes", "")))
+	PutIfSet(payload, "squad_number", user.GetDefault("squadNumber", ""))
+	PutIfSet(payload, "preferred_position", user.GetDefault("preferredPosition", user.GetDefault("favPosition", "")))
+	PutIfSet(payload, "secondary_position", user.GetDefault("secondaryPosition", ""))
+	PutIfSet(payload, "phone", user.GetDefault("phone", ""))
+	PutIfSet(payload, "emergency_contact", user.GetDefault("emergencyContact", ""))
+	PutIfSet(payload, "date_of_birth", user.GetDefault("dateOfBirth", ""))
+	PutIfSet(payload, "medical_notes", user.GetDefault("medicalNotes", ""))
 	modSupabase.RestPost(TBL_PROFILES & "?on_conflict=id", payload, "resolution=merge-duplicates,return=minimal")
+End Sub
+
+' Update profile fields and mirror into in-memory club member maps.
+Public Sub UpdateMember(userId As String, updates As Map)
+	Dim profile As Map
+	profile.Initialize
+	profile.Put("id", userId)
+	profile.Put("name", updates.GetDefault("name", "Player"))
+	profile.Put("avatar", updates.GetDefault("avatar", ""))
+	profile.Put("squadNumber", updates.GetDefault("squadNumber", Null))
+	profile.Put("preferredPosition", updates.GetDefault("preferredPosition", ""))
+	profile.Put("favPosition", updates.GetDefault("preferredPosition", ""))
+	profile.Put("secondaryPosition", updates.GetDefault("secondaryPosition", ""))
+	profile.Put("phone", updates.GetDefault("phone", ""))
+	profile.Put("emergencyContact", updates.GetDefault("emergencyContact", ""))
+	profile.Put("dateOfBirth", updates.GetDefault("dateOfBirth", ""))
+	profile.Put("medicalNotes", updates.GetDefault("medicalNotes", ""))
+	Dim existing As Map = GetProfile(userId)
+	If existing.IsInitialized And existing.ContainsKey("roles") Then
+		profile.Put("roles", existing.Get("roles"))
+	Else
+		profile.Put("roles", NewListFromStrings(Array As String("PLAYER")))
+	End If
+	SaveProfile(profile)
+	SyncMemberIntoClubs(profile)
+End Sub
+
+Private Sub SyncMemberIntoClubs(profile As Map)
+	Dim uid As String = profile.GetDefault("id", "")
+	If uid = "" Then Return
+	Dim ci As Int
+	For ci = 0 To modAppState.Clubs.Size - 1
+		Dim club As Map = modAppState.Clubs.Get(ci)
+		Dim memObj As Object = club.GetDefault("members", Null)
+		If memObj = Null Or (memObj Is List) = False Then Continue
+		Dim members As List = memObj
+		Dim mi As Int
+		For mi = 0 To members.Size - 1
+			Dim mem As Map = members.Get(mi)
+			If mem.GetDefault("id", "") <> uid Then Continue
+			mem.Put("name", profile.GetDefault("name", mem.GetDefault("name", "Player")))
+			mem.Put("avatar", profile.GetDefault("avatar", ""))
+			mem.Put("squadNumber", profile.GetDefault("squadNumber", 0))
+			mem.Put("preferredPosition", profile.GetDefault("preferredPosition", ""))
+			mem.Put("favPosition", profile.GetDefault("preferredPosition", ""))
+			mem.Put("secondaryPosition", profile.GetDefault("secondaryPosition", ""))
+			mem.Put("phone", profile.GetDefault("phone", ""))
+			mem.Put("emergencyContact", profile.GetDefault("emergencyContact", ""))
+			mem.Put("dateOfBirth", profile.GetDefault("dateOfBirth", ""))
+			mem.Put("medicalNotes", profile.GetDefault("medicalNotes", ""))
+		Next
+	Next
 End Sub
 
 Public Sub SaveClub(club As Map, owner As Map)
@@ -277,11 +402,34 @@ Public Sub SaveClub(club As Map, owner As Map)
 	modSupabase.RestPost(TBL_MEMBERS & "?on_conflict=club_id,user_id", mp, "resolution=merge-duplicates,return=minimal")
 End Sub
 
+' Persist last-used size/formation on the club so new matches remember it.
+Public Sub UpdateClubPreferences(clubId As String, teamSize As Int, formation As String)
+	If clubId = "" Then Return
+	Dim payload As Map
+	payload.Initialize
+	If teamSize > 0 Then payload.Put("preferred_team_size", teamSize)
+	If formation <> "" Then payload.Put("preferred_formation", formation)
+	If payload.Size = 0 Then Return
+	modSupabase.RestPatch(TBL_CLUBS & "?id=eq." & modSupabase.UrlEncode(clubId), payload, "return=minimal")
+	Dim club As Map = modAppState.FindClub(clubId)
+	If club.IsInitialized Then
+		If teamSize > 0 Then club.Put("preferredTeamSize", teamSize)
+		If formation <> "" Then club.Put("preferredFormation", formation)
+		modAppState.UpsertClub(club)
+	End If
+End Sub
+
 Public Sub DeleteClub(clubId As String)
 	modSupabase.RestDelete(TBL_CLUBS & "?id=eq." & modSupabase.UrlEncode(clubId))
 End Sub
 
+' Writes the match on the phone and queues one Supabase upsert of the latest copy.
+' player_stats is not a matches column, so it is kept in memory only.
 Public Sub SaveMatch(match As Map)
+	modLocal.QueueMatch(match)
+End Sub
+
+Public Sub BuildMatchPayload(match As Map) As Map
 	Dim lineup As Object = match.GetDefault("lineup", match.GetDefault("tacticalLineup", EmptyMap))
 	Dim payload As Map
 	payload.Initialize
@@ -307,7 +455,7 @@ Public Sub SaveMatch(match As Map)
 	payload.Put("team_size", match.GetDefault("teamSize", Null))
 	payload.Put("sub_plan", match.GetDefault("subPlan", EmptyMap))
 	payload.Put("ai_summary", match.GetDefault("aiSummary", ""))
-	modSupabase.RestPost(TBL_MATCHES & "?on_conflict=id", payload, "resolution=merge-duplicates,return=minimal")
+	Return payload
 End Sub
 
 ' Deletes feed events for the match, then the match row. Clears local cache.
@@ -330,10 +478,15 @@ Public Sub DeleteMatch(matchId As String) As Boolean
 	modAppState.RemoveEventsForMatch(matchId)
 	modAppState.RemoveMatch(matchId)
 	If modAppState.SelectedMatchId = matchId Then modAppState.SelectedMatchId = ""
+	modLocal.ForgetMatch(matchId)
 	Return True
 End Sub
 
 Public Sub SaveEvent(ev As Map)
+	modLocal.QueueEventUpsert(ev)
+End Sub
+
+Public Sub BuildEventPayload(ev As Map) As Map
 	Dim payload As Map
 	payload.Initialize
 	payload.Put("id", ev.Get("id"))
@@ -344,11 +497,38 @@ Public Sub SaveEvent(ev As Map)
 	payload.Put("content", ev.GetDefault("content", ""))
 	payload.Put("details", ev.GetDefault("details", EmptyMap))
 	payload.Put("timestamp", IsoTimestamp(ev.GetDefault("timestamp", DateTime.Now)))
-	modSupabase.RestPost(TBL_EVENTS & "?on_conflict=id", payload, "resolution=merge-duplicates,return=minimal")
+	Return payload
 End Sub
 
 Public Sub DeleteEvent(eventId As String)
-	modSupabase.RestDelete(TBL_EVENTS & "?id=eq." & modSupabase.UrlEncode(eventId))
+	modLocal.QueueEventDelete(eventId)
+End Sub
+
+Public Sub SaveTraining(session As Map)
+	Dim payload As Map
+	payload.Initialize
+	payload.Put("id", session.Get("id"))
+	payload.Put("club_id", session.GetDefault("clubId", ""))
+	payload.Put("session_date", session.GetDefault("date", ""))
+	payload.Put("trainer_of_week_id", NullIfEmpty(session.GetDefault("trainerOfWeekId", "")))
+	payload.Put("present_ids", AsIdList(session.GetDefault("presentIds", Null)))
+	payload.Put("absent_ids", AsIdList(session.GetDefault("absentIds", Null)))
+	payload.Put("well_behaved_ids", AsIdList(session.GetDefault("wellBehavedIds", Null)))
+	payload.Put("poorly_behaved_ids", AsIdList(session.GetDefault("poorlyBehavedIds", Null)))
+	modSupabase.RestPost(TBL_TRAINING & "?on_conflict=id", payload, "resolution=merge-duplicates,return=minimal")
+	If modSupabase.LastError = "" Then modAppState.UpsertTraining(session)
+End Sub
+
+Public Sub DeleteTraining(sessionId As String) As Boolean
+	If sessionId = "" Then Return False
+	modSupabase.RestDelete(TBL_TRAINING & "?id=eq." & modSupabase.UrlEncode(sessionId))
+	If modSupabase.LastError <> "" Then
+		Log("DeleteTraining: " & modSupabase.LastError)
+		Return False
+	End If
+	modAppState.RemoveTraining(sessionId)
+	If modAppState.SelectedTrainingId = sessionId Then modAppState.SelectedTrainingId = ""
+	Return True
 End Sub
 
 Public Sub JoinClub(clubId As String, userId As String, roles As List)
@@ -368,13 +548,95 @@ Public Sub UpdateMemberRoles(clubId As String, userId As String, roles As List)
 		"&user_id=eq." & modSupabase.UrlEncode(userId), mp, "return=minimal")
 End Sub
 
+Public Sub RoleListHas(roles As Object, role As String) As Boolean
+	If roles = Null Then Return False
+	Dim want As String = role.ToUpperCase
+	If (roles Is List) = False Then Return ("" & roles).ToUpperCase = want
+	Dim lst As List = roles
+	Dim i As Int
+	For i = 0 To lst.Size - 1
+		If ("" & lst.Get(i)).ToUpperCase = want Then Return True
+	Next
+	Return False
+End Sub
+
+' Coach wins when the account is both coach and player, so a new club does not force Player back on.
+Public Sub ResolveBaseRole(roles As Object) As String
+	If RoleListHas(roles, "COACH") Then Return "COACH"
+	If RoleListHas(roles, "PLAYER") Then Return "PLAYER"
+	If RoleListHas(roles, "SPECTATOR") Then Return "SPECTATOR"
+	Return "PLAYER"
+End Sub
+
+Public Sub BuildRolesKeepingAdmin(existing As Object, baseRole As String) As List
+	Dim out As List
+	out.Initialize
+	If RoleListHas(existing, "ADMIN") Then out.Add("ADMIN")
+	Dim base As String = baseRole.ToUpperCase
+	If base <> "PLAYER" And base <> "COACH" And base <> "SPECTATOR" Then base = "PLAYER"
+	out.Add(base)
+	Return out
+End Sub
+
+' Sets the club membership and the profile to one base role (Player, Coach, or Spectator). Admin is kept.
+Public Sub SetMemberBaseRole(clubId As String, userId As String, baseRole As String) As Boolean
+	If clubId = "" Or userId = "" Then Return False
+	Dim club As Map = modAppState.FindClub(clubId)
+	Dim existingClubRoles As Object = Null
+	Dim mem As Map
+	mem.Initialize
+	If club.IsInitialized Then
+		Dim memObj As Object = club.GetDefault("members", Null)
+		If memObj Is List Then
+			Dim members As List = memObj
+			Dim i As Int
+			For i = 0 To members.Size - 1
+				Dim m As Map = members.Get(i)
+				If m.GetDefault("id", "") = userId Then
+					mem = m
+					existingClubRoles = m.GetDefault("roles", Null)
+					Exit
+				End If
+			Next
+		End If
+	End If
+	Dim clubRoles As List = BuildRolesKeepingAdmin(existingClubRoles, baseRole)
+	UpdateMemberRoles(clubId, userId, clubRoles)
+	If modSupabase.LastError <> "" Then
+		Log("SetMemberBaseRole club: " & modSupabase.LastError)
+		Return False
+	End If
+	If mem.IsInitialized And mem.ContainsKey("id") Then mem.Put("roles", clubRoles)
+	
+	Dim profile As Map = GetProfile(userId)
+	If profile.IsInitialized And profile.GetDefault("id", "") <> "" Then
+		Dim profileRoles As List = BuildRolesKeepingAdmin(profile.GetDefault("roles", Null), baseRole)
+		profile.Put("roles", profileRoles)
+		SaveProfile(profile)
+		If modSupabase.LastError <> "" Then
+			Log("SetMemberBaseRole profile: " & modSupabase.LastError)
+			Return False
+		End If
+		If modAppState.IsAuthenticated And modAppState.CurrentUser.GetDefault("id", "") = userId Then
+			modAppState.CurrentUser.Put("roles", profileRoles)
+		End If
+	End If
+	Return True
+End Sub
+
 Public Sub RemoveMember(clubId As String, userId As String)
 	modSupabase.RestDelete(TBL_MEMBERS & "?club_id=eq." & modSupabase.UrlEncode(clubId) & _
 		"&user_id=eq." & modSupabase.UrlEncode(userId))
 End Sub
 
-Public Sub AddMember(clubId As String, member As Map)
-	' Prefer RPC when available (dummy members without auth accounts)
+Private Sub PutIfSet(payload As Map, key As String, value As Object)
+	If value = Null Then Return
+	Dim s As String = "" & value
+	If s.Trim = "" Or s = "null" Then Return
+	payload.Put(key, value)
+End Sub
+
+Public Sub AddMember(clubId As String, member As Map) As String
 	Dim args As Map
 	args.Initialize
 	args.Put("p_club_id", clubId)
@@ -384,23 +646,30 @@ Public Sub AddMember(clubId As String, member As Map)
 	Dim role As String = "PLAYER"
 	If roles.Size > 0 Then role = roles.Get(0)
 	args.Put("p_role", role)
-	args.Put("p_squad_number", member.GetDefault("squadNumber", Null))
-	args.Put("p_preferred_position", NullIfEmpty(member.GetDefault("preferredPosition", member.GetDefault("favPosition", ""))))
-	args.Put("p_secondary_position", NullIfEmpty(member.GetDefault("secondaryPosition", "")))
-	args.Put("p_phone", NullIfEmpty(member.GetDefault("phone", "")))
-	args.Put("p_emergency_contact", NullIfEmpty(member.GetDefault("emergencyContact", "")))
-	args.Put("p_date_of_birth", NullIfEmpty(member.GetDefault("dateOfBirth", "")))
-	args.Put("p_medical_notes", NullIfEmpty(member.GetDefault("medicalNotes", "")))
-	modSupabase.Rpc("add_dummy_member", args)
-	If modSupabase.LastError <> "" Then
-		' Fallback: profile upsert + membership
-		Log("add_dummy_member RPC failed, fallback: " & modSupabase.LastError)
-		If member.GetDefault("id", "") = "" Then
-			member.Put("id", GenerateUuid)
-		End If
-		SaveProfile(member)
-		JoinClub(clubId, member.Get("id"), roles)
+	PutIfSet(args, "p_squad_number", member.GetDefault("squadNumber", ""))
+	PutIfSet(args, "p_preferred_position", member.GetDefault("preferredPosition", member.GetDefault("favPosition", "")))
+	PutIfSet(args, "p_secondary_position", member.GetDefault("secondaryPosition", ""))
+	PutIfSet(args, "p_phone", member.GetDefault("phone", ""))
+	PutIfSet(args, "p_emergency_contact", member.GetDefault("emergencyContact", ""))
+	PutIfSet(args, "p_date_of_birth", member.GetDefault("dateOfBirth", ""))
+	PutIfSet(args, "p_medical_notes", member.GetDefault("medicalNotes", ""))
+	Dim raw As Object = modSupabase.Rpc("add_dummy_member", args)
+	If modSupabase.LastError = "" And raw Is Map Then
+		Dim created As Map = raw
+		Dim newId As String = "" & created.GetDefault("id", "")
+		If newId <> "" And newId <> "null" Then Return newId
 	End If
+	Log("add_dummy_member RPC failed, fallback: " & modSupabase.LastError)
+	Dim mid As String = member.GetDefault("id", "")
+	If mid = "" Or mid.StartsWith("local_") Then
+		mid = GenerateUuid
+		member.Put("id", mid)
+	End If
+	SaveProfile(member)
+	If modSupabase.LastError <> "" Then Return ""
+	JoinClub(clubId, mid, roles)
+	If modSupabase.LastError <> "" Then Return ""
+	Return mid
 End Sub
 
 Public Sub FetchInitialData
@@ -506,7 +775,7 @@ Public Sub FetchInitialData
 				clubs.Add(club)
 			Next
 		End If
-		modAppState.Clubs = clubs
+		If clubsRaw Is List Then modAppState.Clubs = clubs
 		
 		Dim matchesRaw As Object = modSupabase.RestGet(TBL_MATCHES & "?select=*&order=date.asc")
 		Dim matches As List
@@ -519,9 +788,31 @@ Public Sub FetchInitialData
 				Dim matchRow As Map = matchesList.Get(mk)
 				matches.Add(MapMatch(matchRow))
 			Next
+			modAppState.Matches = modLocal.PreferDirtyMatches(matches)
+		Else
+			Log("Fetch matches: " & modSupabase.LastError)
 		End If
-		modAppState.Matches = matches
 		
+		' Missing table must not wipe clubs or matches. Run reference/supabase_training_sessions.sql once.
+		Try
+			Dim trainingRaw As Object = modSupabase.RestGet(TBL_TRAINING & "?select=*&order=session_date.desc,created_at.desc")
+			If trainingRaw Is List Then
+				Dim trainingRows As List = trainingRaw
+				Dim sessions As List
+				sessions.Initialize
+				Dim ti As Int
+				For ti = 0 To trainingRows.Size - 1
+					sessions.Add(MapTraining(trainingRows.Get(ti)))
+				Next
+				modAppState.TrainingSessions = sessions
+			Else
+				Log("Fetch training: " & modSupabase.LastError)
+			End If
+		Catch
+			Log("Fetch training: " & LastException)
+		End Try
+		
+		' Latest 100 only. Coach export loads every event for the coach's clubs and does not use this list.
 		Dim eventsRaw As Object = modSupabase.RestGet(TBL_EVENTS & "?select=*&order=timestamp.desc&limit=100")
 		Dim events As List
 		events.Initialize
@@ -533,8 +824,12 @@ Public Sub FetchInitialData
 				Dim erow As Map = eventsList.Get(ek)
 				events.Add(MapEvent(erow))
 			Next
+			modAppState.FeedEvents = modLocal.PreferDirtyEvents(events)
+			modLocal.RecountLoadedScores
+		Else
+			Log("Fetch events: " & modSupabase.LastError)
 		End If
-		modAppState.FeedEvents = events
+		modLocal.PersistSnapshot
 	Catch
 		Log("FetchInitialData: " & LastException)
 	End Try

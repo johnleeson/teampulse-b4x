@@ -15,6 +15,8 @@ Sub Process_Globals
 	Public UserId As String
 	Public UserEmail As String
 	Public DisplayName As String
+	' Access token expiry in DateTime ticks. 0 means refresh on the next call.
+	Public ExpiresAt As Long
 	Private Const SESSION_FILE As String = "supabase_session.json"
 	Private StrictModeReady As Boolean
 End Sub
@@ -27,6 +29,7 @@ Public Sub Initialize
 	UserId = ""
 	UserEmail = ""
 	DisplayName = ""
+	ExpiresAt = 0
 	Try
 		AllowNetworkOnMainThread
 		If modConfig.SUPABASE_URL = "" Or modConfig.SUPABASE_ANON_KEY = "" Then
@@ -68,6 +71,7 @@ Public Sub SignOut
 	UserId = ""
 	UserEmail = ""
 	DisplayName = ""
+	ExpiresAt = 0
 	Try
 		If File.Exists(File.DirInternal, SESSION_FILE) Then
 			File.Delete(File.DirInternal, SESSION_FILE)
@@ -87,6 +91,7 @@ Private Sub SaveSession
 		m.Put("user_id", UserId)
 		m.Put("email", UserEmail)
 		m.Put("display_name", DisplayName)
+		m.Put("expires_at", ExpiresAt)
 		Dim jg As JSONGenerator
 		jg.Initialize(m)
 		File.WriteString(File.DirInternal, SESSION_FILE, jg.ToString)
@@ -108,6 +113,7 @@ Private Sub LoadSession
 		UserId = m.GetDefault("user_id", "")
 		UserEmail = m.GetDefault("email", "")
 		DisplayName = m.GetDefault("display_name", "")
+		ExpiresAt = AsLong(m.GetDefault("expires_at", 0))
 	Catch
 		Log("LoadSession: " & LastException.Message)
 	End Try
@@ -117,7 +123,8 @@ Public Sub ApplyAuthResponse(data As Map) As Boolean
 	LastError = ""
 	Try
 		AccessToken = data.GetDefault("access_token", "")
-		RefreshToken = data.GetDefault("refresh_token", "")
+		Dim nextRefresh As String = data.GetDefault("refresh_token", "")
+		If nextRefresh <> "" Then RefreshToken = nextRefresh
 		Dim userObj As Object = data.Get("user")
 		If userObj <> Null And userObj Is Map Then
 			Dim u As Map = userObj
@@ -133,12 +140,40 @@ Public Sub ApplyAuthResponse(data As Map) As Boolean
 			LastError = "Auth response missing token or user"
 			Return False
 		End If
+		Dim secs As Long = AsLong(data.GetDefault("expires_in", 3600))
+		If secs < 60 Then secs = 3600
+		ExpiresAt = DateTime.Now + secs * DateTime.TicksPerSecond
 		SaveSession
 		Return True
 	Catch
 		LastError = LastException.Message
 		Return False
 	End Try
+End Sub
+
+' "ok" when the access token is usable, "offline" when refresh could not reach
+' the server, "rejected" when the refresh token itself was refused.
+Public Sub EnsureFreshToken As String
+	If AccessToken = "" And RefreshToken = "" Then Return "rejected"
+	If RefreshToken = "" Then Return "ok"
+	If ExpiresAt > DateTime.Now + 60 * DateTime.TicksPerSecond Then Return "ok"
+	Return RefreshSession
+End Sub
+
+Public Sub RefreshSession As String
+	If RefreshToken = "" Then Return "rejected"
+	Dim body As Map
+	body.Initialize
+	body.Put("refresh_token", RefreshToken)
+	Dim data As Map = AuthPost("token?grant_type=refresh_token", body)
+	If data.ContainsKey("access_token") Then
+		If ApplyAuthResponse(data) Then Return "ok"
+	End If
+	Dim err As String = LastError
+	If err.StartsWith("HTTP 400") Or err.StartsWith("HTTP 401") Or err.StartsWith("HTTP 403") Then
+		Return "rejected"
+	End If
+	Return "offline"
 End Sub
 
 Public Sub AuthPost(pathAndQuery As String, bodyMap As Map) As Map
@@ -204,7 +239,7 @@ End Sub
 ' Sync HTTP for StaticCode callers. StrictMode.permitAll avoids NetworkOnMainThreadException.
 Public Sub RequestRaw(method As String, url As String, body As String, useUserToken As Boolean, prefer As String) As Object
 	AllowNetworkOnMainThread
-	Return DoHttp(method, url, body, useUserToken, prefer)
+	Return HttpOnce(method, url, body, useUserToken, prefer, True)
 End Sub
 
 Private Sub ParseBody(text As String) As Object
@@ -224,11 +259,18 @@ Private Sub ParseBody(text As String) As Object
 	End Try
 End Sub
 
-Private Sub DoHttp(method As String, url As String, body As String, useUserToken As Boolean, prefer As String) As Object
+Private Sub HttpOnce(method As String, url As String, body As String, useUserToken As Boolean, prefer As String, allowRefresh As Boolean) As Object
 	LastError = ""
 	Dim empty As Map
 	empty.Initialize
 	Dim joNull As Object = Null
+	If useUserToken And allowRefresh Then
+		Dim tokenState As String = EnsureFreshToken
+		If tokenState = "rejected" Then
+			LastError = "Session expired"
+			Return empty
+		End If
+	End If
 	Try
 		Dim jurl As JavaObject
 		jurl.InitializeNewInstance("java.net.URL", Array(url))
@@ -268,6 +310,13 @@ Private Sub DoHttp(method As String, url As String, body As String, useUserToken
 			text = ReadStreamToString(streamObj)
 		End If
 		
+		If code = 401 And useUserToken And allowRefresh Then
+			LastError = "HTTP " & code & ": " & text
+			Log(LastError)
+			Dim refreshed As String = RefreshSession
+			If refreshed = "ok" Then Return HttpOnce(method, url, body, useUserToken, prefer, False)
+			Return empty
+		End If
 		If code < 200 Or code >= 300 Then
 			LastError = "HTTP " & code & ": " & text
 			Log(LastError)
@@ -291,6 +340,21 @@ Private Sub ReadStreamToString(streamObj As Object) As String
 	Catch
 		Log("ReadStreamToString: " & LastException.Message)
 		Return ""
+	End Try
+End Sub
+
+Private Sub AsLong(v As Object) As Long
+	If v = Null Then Return 0
+	Try
+		Dim n As Long = v
+		Return n
+	Catch
+		Try
+			Dim d As Double = v
+			Return d
+		Catch
+			Return 0
+		End Try
 	End Try
 End Sub
 

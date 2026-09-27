@@ -23,8 +23,8 @@ Private Sub B4XPage_Appear
 End Sub
 
 Private Sub BuildUI
-	' ← Matches ......................... 📅
-	Dim chrome As Map = modUI.AddPageChrome(Root, "Matches", "btnBack", "btnNew", "📅", True)
+	' ← Matches ......................... +
+	Dim chrome As Map = modUI.AddPageChrome(Root, "Matches", "btnBack", "btnNew", "+", True)
 	contentTop = chrome.Get("ContentTop")
 	clv = modUI.AddCustomListViewThemed(Root, 0, contentTop, Root.Width, Root.Height - contentTop, Me, "clv", True)
 End Sub
@@ -40,7 +40,7 @@ Public Sub Refresh
 		empty.Color = modConfig.COLOR_DARK_BG
 		Dim lbl As Label
 		lbl.Initialize("")
-		lbl.Text = "No matches yet. Tap 📅 to schedule."
+		lbl.Text = "No matches yet. Tap + to schedule."
 		lbl.TextSize = 14
 		lbl.TextColor = modConfig.COLOR_DARK_MUTED
 		lbl.Gravity = Gravity.CENTER
@@ -78,6 +78,7 @@ Private Sub clv_ItemClick (Index As Int, Value As Object)
 End Sub
 
 Private Sub btnNew_Click
+	modAppState.EditingExistingMatch = False
 	B4XPages.ShowPage("ScheduleMatch")
 End Sub
 

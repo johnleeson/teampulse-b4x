@@ -108,7 +108,6 @@ Public Sub Compute(club As Map, matches As List, events As List, selectedMatchId
 				dst.Put("yellowCards", dst.GetDefault("yellowCards", 0) + src.GetDefault("yellowCards", 0))
 				dst.Put("redCards", dst.GetDefault("redCards", 0) + src.GetDefault("redCards", 0))
 				dst.Put("ballsOverFence", dst.GetDefault("ballsOverFence", 0) + src.GetDefault("ballsOverFence", 0))
-				dst.Put("minutesPlayed", dst.GetDefault("minutesPlayed", 0) + src.GetDefault("minutesPlayed", 0))
 				If src.GetDefault("isInjured", False) = True Then dst.Put("isInjured", dst.GetDefault("isInjured", 0) + 1)
 				If src.GetDefault("isLastMinuteDropout", False) = True Then dst.Put("isLastMinuteDropout", dst.GetDefault("isLastMinuteDropout", 0) + 1)
 			End If
@@ -116,8 +115,8 @@ Public Sub Compute(club As Map, matches As List, events As List, selectedMatchId
 		
 		' POTM awards: coach / opposition category picks + fanCounts tallies
 		Dim potmVotes As Map = modDb.NormalizePotmVotes(m.GetDefault("potmVotes", EmptyMap))
-		AwardPotm(playerStats, modDb.GetCategoryPotmPlayerId(potmVotes, "coach"))
-		AwardPotm(playerStats, modDb.GetCategoryPotmPlayerId(potmVotes, "opposition"))
+		AwardPotm(playerStats, modDb.GetCategoryPotmPlayerIds(potmVotes, "coach"))
+		AwardPotm(playerStats, modDb.GetCategoryPotmPlayerIds(potmVotes, "opposition"))
 		Dim fanCounts As Map
 		Dim fcObj As Object = potmVotes.GetDefault("fanCounts", Null)
 		If fcObj <> Null And fcObj Is Map Then
@@ -137,17 +136,30 @@ Public Sub Compute(club As Map, matches As List, events As List, selectedMatchId
 				Next
 			End If
 		End If
-		Dim winnerId As String = ""
 		Dim best As Int = -1
 		For Each cand As String In fanCounts.Keys
 			Dim c As Int = fanCounts.Get(cand)
-			If c > best Then
-				best = c
-				winnerId = cand
-			End If
+			If c > best Then best = c
 		Next
-		If best > 0 Then AwardPotm(playerStats, winnerId)
+		If best > 0 Then
+			Dim tied As List
+			tied.Initialize
+			For Each cand2 As String In fanCounts.Keys
+				Dim c2 As Int = fanCounts.Get(cand2)
+				If c2 = best Then tied.Add(cand2)
+			Next
+			AwardPotm(playerStats, tied)
+		End If
+		AddFeedMinutes(playerStats, m, events)
 	Next
+	' Minutes already played in a match that is still live.
+	If selectedMatchId = "all" Or selectedMatchId = "" Then
+		For Each liveM As Map In matches
+			If liveM.GetDefault("clubId", "") <> clubId Then Continue
+			If liveM.GetDefault("status", "") <> "LIVE" Then Continue
+			AddFeedMinutes(playerStats, liveM, events)
+		Next
+	End If
 	
 	' Event-based goals/assists/cards for selected matches
 	Dim matchIdSet As Map
@@ -160,7 +172,7 @@ Public Sub Compute(club As Map, matches As List, events As List, selectedMatchId
 		If matchIdSet.ContainsKey(mid) = False Then Continue
 		Dim details As Map = e.GetDefault("details", EmptyMap)
 		Dim etype As String = e.GetDefault("type", "")
-		If etype = "GOAL" Then
+		If etype = "GOAL" And modLocal.IsOwnGoal(details) = False Then
 			Dim scorer As String = details.GetDefault("scorer", "")
 			Dim assist As String = details.GetDefault("assist", "")
 			If scorer <> "" And playerStats.ContainsKey(scorer) Then
@@ -206,10 +218,51 @@ Public Sub Compute(club As Map, matches As List, events As List, selectedMatchId
 	Return out
 End Sub
 
-Private Sub AwardPotm(playerStats As Map, playerId As String)
-	If playerId = "" Or playerStats.ContainsKey(playerId) = False Then Return
-	Dim pw As Map = playerStats.Get(playerId)
-	pw.Put("potmWins", pw.GetDefault("potmWins", 0) + 1)
+' Prefer wall-clock minutes from the feed. Stored playerStats are only a fallback
+' when the match has no kick-off / period events to measure.
+Private Sub AddFeedMinutes(playerStats As Map, m As Map, events As List)
+	Dim feed As Map = modAppState.CalculateMatchMinutesFrom(m, events)
+	If feed.IsInitialized And feed.Size > 0 Then
+		For Each pid As String In feed.Keys
+			If playerStats.ContainsKey(pid) = False Then Continue
+			Dim add As Int = CoerceInt(feed.Get(pid))
+			If add <= 0 Then Continue
+			Dim dst As Map = playerStats.Get(pid)
+			dst.Put("minutesPlayed", CoerceInt(dst.GetDefault("minutesPlayed", 0)) + add)
+		Next
+		Return
+	End If
+	Dim stored As Map = m.GetDefault("playerStats", EmptyMap)
+	If stored.IsInitialized = False Then Return
+	For Each pid2 As String In stored.Keys
+		If playerStats.ContainsKey(pid2) = False Then Continue
+		Dim ps As Map = stored.Get(pid2)
+		Dim add2 As Int = CoerceInt(ps.GetDefault("minutesPlayed", 0))
+		If add2 <= 0 Then Continue
+		Dim dst2 As Map = playerStats.Get(pid2)
+		dst2.Put("minutesPlayed", CoerceInt(dst2.GetDefault("minutesPlayed", 0)) + add2)
+	Next
+End Sub
+
+Private Sub CoerceInt(v As Object) As Int
+	Try
+		Dim n As Int = v
+		Return n
+	Catch
+		Return 0
+	End Try
+End Sub
+
+Private Sub AwardPotm(playerStats As Map, playerIds As List)
+	If playerIds.IsInitialized = False Then Return
+	Dim i As Int
+	For i = 0 To playerIds.Size - 1
+		Dim playerId As String = "" & playerIds.Get(i)
+		If playerId <> "" And playerStats.ContainsKey(playerId) Then
+			Dim pw As Map = playerStats.Get(playerId)
+			pw.Put("potmWins", pw.GetDefault("potmWins", 0) + 1)
+		End If
+	Next
 End Sub
 
 Private Sub ApplyResultToTeam(team As List, playerStats As Map, myScore As Int, theirScore As Int)

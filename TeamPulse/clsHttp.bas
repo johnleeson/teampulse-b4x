@@ -13,22 +13,38 @@ Public Sub Initialize
 	LastError = ""
 End Sub
 
-' Returns Map with keys: ok (Boolean), data (Object), error (String)
+' Returns Map with keys: ok (Boolean), data (Object), error (String), status (Int)
 Public Sub Request(method As String, url As String, body As String, useUserToken As Boolean, prefer As String) As ResumableSub
+	Wait For (RequestAttempt(method, url, body, useUserToken, prefer, True)) Complete (res As Map)
+	Return res
+End Sub
+
+Private Sub RequestAttempt(method As String, url As String, body As String, useUserToken As Boolean, prefer As String, allowRefresh As Boolean) As ResumableSub
 	LastError = ""
 	Dim out As Map
 	out.Initialize
 	out.Put("ok", False)
 	out.Put("data", Null)
 	out.Put("error", "")
+	out.Put("status", 0)
+	If useUserToken And allowRefresh Then
+		Dim tokenState As String = modSupabase.EnsureFreshToken
+		If tokenState = "rejected" Then
+			LastError = "Session expired"
+			out.Put("error", LastError)
+			out.Put("status", 401)
+			Return out
+		End If
+	End If
 	Dim j As HttpJob
 	j.Initialize("", Me)
 	Try
 		Dim m As String = method.ToUpperCase
 		If m = "GET" Then
 			j.Download(url)
+		Else If m = "DELETE" Then
+			j.Delete(url)
 		Else
-			' POST (and upserts). PATCH/DELETE stay on sync modSupabase.RequestRaw.
 			j.PostString(url, body)
 			j.GetRequest.SetContentType("application/json")
 		End If
@@ -46,16 +62,34 @@ Public Sub Request(method As String, url As String, body As String, useUserToken
 		Return out
 	End Try
 	Wait For (j) JobDone (job As HttpJob)
+	Dim status As Int = StatusOf(job)
+	out.Put("status", status)
 	If job.Success Then
 		out.Put("ok", True)
 		out.Put("data", ParseBody(job.GetString))
-	Else
-		LastError = "HTTP " & job.Response.StatusCode & ": " & job.ErrorMessage
-		out.Put("error", LastError)
-		Log(LastError)
+		job.Release
+		Return out
 	End If
+	LastError = "HTTP " & status & ": " & job.ErrorMessage
+	out.Put("error", LastError)
+	Log(LastError)
 	job.Release
+	If status = 401 And useUserToken And allowRefresh Then
+		Dim refreshed As String = modSupabase.RefreshSession
+		If refreshed = "ok" Then
+			Wait For (RequestAttempt(method, url, body, useUserToken, prefer, False)) Complete (retry As Map)
+			Return retry
+		End If
+	End If
 	Return out
+End Sub
+
+Private Sub StatusOf(job As HttpJob) As Int
+	Try
+		Return job.Response.StatusCode
+	Catch
+		Return 0
+	End Try
 End Sub
 
 Public Sub AuthPost(pathAndQuery As String, bodyMap As Map) As ResumableSub
@@ -69,6 +103,12 @@ End Sub
 Public Sub RestGet(tableAndQuery As String) As ResumableSub
 	Dim url As String = modConfig.SUPABASE_URL & "/rest/v1/" & tableAndQuery
 	Wait For (Request("GET", url, "", True, "")) Complete (res As Map)
+	Return res
+End Sub
+
+Public Sub RestDelete(tableAndQuery As String) As ResumableSub
+	Dim url As String = modConfig.SUPABASE_URL & "/rest/v1/" & tableAndQuery
+	Wait For (Request("DELETE", url, "", True, "return=minimal")) Complete (res As Map)
 	Return res
 End Sub
 

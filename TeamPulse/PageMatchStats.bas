@@ -60,6 +60,17 @@ Private Sub PlayerName(pid As String) As String
 	Return nameById.GetDefault(pid, "Unknown")
 End Sub
 
+Private Sub JoinNames(ids As List) As String
+	Dim sb As StringBuilder
+	sb.Initialize
+	Dim i As Int
+	For i = 0 To ids.Size - 1
+		If i > 0 Then sb.Append(" & ")
+		sb.Append(PlayerName(ids.Get(i)))
+	Next
+	Return sb.ToString
+End Sub
+
 Private Sub BuildBody
 	content.RemoveAllViews
 	Dim y As Int = 12dip
@@ -188,34 +199,38 @@ End Sub
 Private Sub BuildAwardsSection(y As Int, w As Int) As Int
 	y = AddSectionHeader(y, "PLAYER AWARDS")
 	Dim potm As Map = modDb.NormalizePotmVotes(match.GetDefault("potmVotes", Null))
-	Dim coachId As String = modDb.GetCategoryPotmPlayerId(potm, "coach")
-	Dim oppId As String = modDb.GetCategoryPotmPlayerId(potm, "opposition")
-	Dim fanWinner As String = ""
+	Dim coachIds As List = modDb.GetCategoryPotmPlayerIds(potm, "coach")
+	Dim oppIds As List = modDb.GetCategoryPotmPlayerIds(potm, "opposition")
 	Dim fanBest As Int = -1
+	Dim fanWinners As List
+	fanWinners.Initialize
 	Dim fanCounts As Map
 	Dim fcObj As Object = potm.GetDefault("fanCounts", Null)
 	If fcObj <> Null And fcObj Is Map Then
 		fanCounts = fcObj
 		For Each pid As String In fanCounts.Keys
 			Dim c As Int = fanCounts.Get(pid)
-			If c > fanBest Then
-				fanBest = c
-				fanWinner = pid
-			End If
+			If c > fanBest Then fanBest = c
 		Next
+		If fanBest > 0 Then
+			For Each pid2 As String In fanCounts.Keys
+				Dim c2 As Int = fanCounts.Get(pid2)
+				If c2 = fanBest Then fanWinners.Add(pid2)
+			Next
+		End If
 	End If
 	
 	Dim any As Boolean = False
-	If coachId <> "" Then
-		y = AddStatRow(y, w, "Coach's POTM", PlayerName(coachId))
+	If coachIds.Size > 0 Then
+		y = AddStatRow(y, w, "Coach's POTM", JoinNames(coachIds))
 		any = True
 	End If
-	If oppId <> "" Then
-		y = AddStatRow(y, w, "Opposition POTM", PlayerName(oppId))
+	If oppIds.Size > 0 Then
+		y = AddStatRow(y, w, "Opposition POTM", JoinNames(oppIds))
 		any = True
 	End If
-	If fanWinner <> "" And fanBest > 0 Then
-		y = AddStatRow(y, w, "Fans' POTM", PlayerName(fanWinner) & " (" & fanBest & " votes)")
+	If fanWinners.Size > 0 Then
+		y = AddStatRow(y, w, "Fans' POTM", JoinNames(fanWinners) & " (" & fanBest & " votes)")
 		any = True
 	End If
 	If any = False Then y = AddEmptyRow(y, w, "No awards yet — fill in post-match")
@@ -224,10 +239,14 @@ End Sub
 
 Private Sub BuildMinutesSection(y As Int, w As Int) As Int
 	y = AddSectionHeader(y, "MINUTES PLAYED")
-	' Always derive from live feed timestamps + SUBs (ignores stale all-60 projections)
+	' Wall-clock playing time (kick-off, halves, subs). Ignores stale stored totals.
 	Dim minutes As Map = modAppState.CalculateMatchMinutes(match)
 	Dim fromFeed As Boolean = minutes.Size > 0
 	If fromFeed = False Then
+		minutes = StoredMinutes(match)
+		fromFeed = False
+	End If
+	If minutes.Size = 0 Then
 		Dim lineup As Map = match.GetDefault("lineup", match.GetDefault("tacticalLineup", EmptyMap))
 		Dim plan As Map = match.GetDefault("subPlan", modSubPlanner.EmptyPlan(60))
 		If lineup.IsInitialized And lineup.Size > 0 Then
@@ -270,6 +289,26 @@ Private Sub BuildMinutesSection(y As Int, w As Int) As Int
 	Return y + 8dip
 End Sub
 
+Private Sub StoredMinutes(m As Map) As Map
+	Dim out As Map
+	out.Initialize
+	Dim stats As Map
+	Dim stObj As Object = m.GetDefault("playerStats", Null)
+	If stObj = Null Or (stObj Is Map) = False Then Return out
+	stats = stObj
+	For Each pid As String In stats.Keys
+		Dim ps As Map = stats.Get(pid)
+		Dim mins As Int = 0
+		Try
+			mins = ps.GetDefault("minutesPlayed", 0)
+		Catch
+			mins = 0
+		End Try
+		If mins > 0 Then out.Put(pid, mins)
+	Next
+	Return out
+End Sub
+
 Private Sub PersistMinutes(minutes As Map)
 	Dim stats As Map
 	Dim stObj As Object = match.GetDefault("playerStats", Null)
@@ -284,7 +323,7 @@ Private Sub PersistMinutes(minutes As Map)
 		Dim ps As Map
 		If stats.ContainsKey(pid) Then
 			ps = stats.Get(pid)
-			If ps.GetDefault("minutesPlayed", -1) <> mins Then changed = True
+			If mins <> ps.GetDefault("minutesPlayed", -1) Then changed = True
 		Else
 			ps.Initialize
 			ps.Put("goals", 0)

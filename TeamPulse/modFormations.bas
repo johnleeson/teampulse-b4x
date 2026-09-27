@@ -77,6 +77,61 @@ Public Sub TeamSizeForFormation(formationName As String) As Int
 	Return 11
 End Sub
 
+' Layout slots for round markers: keep GK/ST, lift defenders & midfield.
+Public Sub SpreadSlot(x As Float, y As Float) As Map
+	Dim m As Map
+	m.Initialize
+	Dim nx As Float = 50 + (x - 50) * 1.12
+	If nx < 9 Then nx = 9
+	If nx > 91 Then nx = 91
+	
+	Dim ny As Float
+	If y >= 86 Then
+		' Goalkeeper — stay near the goal line
+		ny = 90
+	Else If y <= 22 Then
+		' Strikers — stay near the halfway line
+		ny = Max(11, y * 0.95)
+	Else
+		' Defenders / midfield: map original band upward so CBs clear GK
+		' Original ~24–84 → display ~20–64
+		ny = 20 + (y - 24) / 60 * 44
+		If ny < 20 Then ny = 20
+		If ny > 64 Then ny = 64
+	End If
+	
+	m.Put("x", nx)
+	m.Put("y", ny)
+	Return m
+End Sub
+
+' Display percentages (0–100). A layout entry is already in display space.
+' Slots with no entry keep SpreadSlot of the formation coordinate.
+Public Sub DisplaySlot(slot As Map, layout As Map) As Map
+	Dim id As String = "" & slot.GetDefault("id", "")
+	If id <> "" And layout.IsInitialized And layout.ContainsKey(id) Then
+		Dim raw As Object = layout.Get(id)
+		If raw Is Map Then
+			Dim cm As Map = raw
+			Dim custom As Map
+			custom.Initialize
+			custom.Put("x", ToFloat(cm.GetDefault("x", 50)))
+			custom.Put("y", ToFloat(cm.GetDefault("y", 50)))
+			Return custom
+		End If
+	End If
+	Return SpreadSlot(slot.Get("x"), slot.Get("y"))
+End Sub
+
+Private Sub ToFloat(v As Object) As Float
+	Try
+		Dim n As Float = v
+		Return n
+	Catch
+		Return 50
+	End Try
+End Sub
+
 Public Sub GetPositions(formationName As String) As List
 	Select formationName
 		Case "1-2-1"

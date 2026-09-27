@@ -9,7 +9,8 @@ Sub Class_Globals
 	Private Root As B4XView
 	Private xui As XUI
 	Private lblTitle As Label
-	Private lblStatus As Label
+	Private lblWhen As Label
+	Private lblLocation As Label
 	Private match As Map
 	Private btnLive As Button
 	Private btnDelete As Button
@@ -17,6 +18,7 @@ Sub Class_Globals
 	Private content As Panel
 	Private dialog As B4XDialog
 	Private contentTop As Int
+	Private listTop As Int
 End Sub
 
 Public Sub Initialize
@@ -33,16 +35,39 @@ Private Sub B4XPage_Appear
 End Sub
 
 Private Sub BuildUI
-	Dim chrome As Map = modUI.AddPageChrome(Root, "Match", "btnBack", "", "", True)
+	Dim chrome As Map = modUI.AddPageChrome(Root, "", "btnBack", "", "", True)
 	contentTop = chrome.Get("ContentTop")
-	lblTitle = chrome.Get("TitleLabel")
+	Dim chromeTitle As Label = chrome.Get("TitleLabel")
+	chromeTitle.Visible = False
 	
-	lblStatus.Initialize("")
-	lblStatus.TextSize = 12
-	lblStatus.TextColor = modConfig.COLOR_DARK_MUTED
-	Root.AddView(lblStatus, 16dip, contentTop, Root.Width - 32dip, 20dip)
+	Dim headerLeft As Int = 16dip
+	Dim headerW As Int = Root.Width - 32dip
+	Dim hy As Int = contentTop
 	
-	Dim listTop As Int = contentTop + 28dip
+	lblTitle.Initialize("")
+	lblTitle.TextSize = 18
+	lblTitle.Typeface = Typeface.DEFAULT_BOLD
+	lblTitle.TextColor = modConfig.COLOR_DARK_TEXT
+	lblTitle.SingleLine = False
+	lblTitle.Gravity = Bit.Or(Gravity.TOP, Gravity.LEFT)
+	Root.AddView(lblTitle, headerLeft, hy, headerW, 48dip)
+	hy = hy + 52dip
+	
+	lblWhen.Initialize("")
+	lblWhen.TextSize = 12
+	lblWhen.TextColor = modConfig.COLOR_DARK_MUTED
+	lblWhen.SingleLine = True
+	Root.AddView(lblWhen, headerLeft, hy, headerW, 18dip)
+	hy = hy + 22dip
+	
+	lblLocation.Initialize("")
+	lblLocation.TextSize = 12
+	lblLocation.TextColor = modConfig.COLOR_DARK_MUTED
+	lblLocation.SingleLine = True
+	Root.AddView(lblLocation, headerLeft, hy, headerW, 18dip)
+	hy = hy + 26dip
+	
+	listTop = hy
 	sv.Initialize(1400dip)
 	Root.AddView(sv, 0, listTop, Root.Width, Root.Height - listTop)
 	content = sv.Panel
@@ -53,28 +78,32 @@ Private Sub BuildUI
 	Dim h As Int = modUI.HubNavCardHeight
 	Dim gap As Int = 12dip
 	
-	Dim c1 As Panel = CreateDarkHubCard(w, "Squad", "Confirm who is available", "btnSquad")
+	Dim c1 As Panel = CreateDarkHubCard(w, "Match details", "Venue, opponent, time, competition", "btnEditMatch")
 	content.AddView(c1, 16dip, y, w, h)
 	y = y + h + gap
 	
-	Dim c2 As Panel = CreateDarkHubCard(w, "Lineup", "Formation and starting XI", "btnLineup")
+	Dim c2 As Panel = CreateDarkHubCard(w, "Squad", "Confirm who is available", "btnSquad")
 	content.AddView(c2, 16dip, y, w, h)
 	y = y + h + gap
 	
-	Dim c3 As Panel = CreateDarkHubCard(w, "Sub plan", "Fair 4-quarter rotations", "btnSubs")
+	Dim c3 As Panel = CreateDarkHubCard(w, "Lineup", "Formation and starting XI", "btnLineup")
 	content.AddView(c3, 16dip, y, w, h)
 	y = y + h + gap
 	
-	Dim c4 As Panel = CreateDarkHubCard(w, "Live feed", "Score, goals, cards, events", "btnLiveFeed")
+	Dim c4 As Panel = CreateDarkHubCard(w, "Sub plan", "Fair 4-quarter rotations", "btnSubs")
 	content.AddView(c4, 16dip, y, w, h)
 	y = y + h + gap
 	
-	Dim c5 As Panel = CreateDarkHubCard(w, "Match stats", "Goals, assists, awards, minutes", "btnStats")
+	Dim c5 As Panel = CreateDarkHubCard(w, "Live feed", "Score, goals, cards, events", "btnLiveFeed")
 	content.AddView(c5, 16dip, y, w, h)
 	y = y + h + gap
 	
-	Dim c6 As Panel = CreateDarkHubCard(w, "Post-match", "Summary, POTM, fan votes", "btnSummary")
+	Dim c6 As Panel = CreateDarkHubCard(w, "Match stats", "Goals, assists, awards, minutes", "btnStats")
 	content.AddView(c6, 16dip, y, w, h)
+	y = y + h + gap
+	
+	Dim c7 As Panel = CreateDarkHubCard(w, "Post-match", "Summary, POTM, fan votes", "btnSummary")
+	content.AddView(c7, 16dip, y, w, h)
 	y = y + h + 24dip
 	
 	btnLive.Initialize("btnGoLive")
@@ -129,18 +158,32 @@ End Sub
 
 Private Sub Load
 	match = modAppState.FindMatch(modAppState.SelectedMatchId)
-	Dim t As String = match.GetDefault("title", "Match")
-	lblTitle.Text = t
+	lblTitle.Text = match.GetDefault("title", "Match")
 	Dim st As String = match.GetDefault("status", "UPCOMING")
+	Dim ukDate As String = modUI.FormatUkDate(match.GetDefault("date", ""))
+	Dim ukTime As String = modUI.FormatUkTime(match.GetDefault("kickOffTime", ""))
+	Dim whenTxt As String = st
+	If ukDate <> "" Then whenTxt = whenTxt & "  ·  " & ukDate
+	If ukTime <> "" Then whenTxt = whenTxt & "  ·  " & ukTime
+	lblWhen.Text = whenTxt
 	Dim loc As String = match.GetDefault("location", "")
-	Dim when As String = match.GetDefault("date", "") & "  " & match.GetDefault("kickOffTime", "")
-	lblStatus.Text = st & "  ·  " & when.Trim
-	If loc <> "" Then lblStatus.Text = lblStatus.Text & "  ·  " & loc
+	If loc = "" Then
+		lblLocation.Text = ""
+		lblLocation.Visible = False
+	Else
+		lblLocation.Text = loc
+		lblLocation.Visible = True
+	End If
 	btnLive.Visible = (st = "UPCOMING")
 End Sub
 
 Private Sub btnSquad_Click
 	B4XPages.ShowPage("MatchSquad")
+End Sub
+
+Private Sub btnEditMatch_Click
+	modAppState.EditingExistingMatch = True
+	B4XPages.ShowPage("ScheduleMatch")
 End Sub
 
 Private Sub btnLineup_Click

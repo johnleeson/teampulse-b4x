@@ -23,6 +23,7 @@ Layouts and logic are rebuilt in B4X (not an import). Gemini / AI features from 
 - Substitution planner
 - Live feed: score, goals, subs, cards, HT/FT
 - Stats: W/D/L, GF/GA, player goals/assists/apps/cards/POTM
+- Training log: date, present / absent, trainer of the week, well behaved / not
 
 ## Open in B4A
 
@@ -34,13 +35,14 @@ Layouts and logic are rebuilt in B4X (not an import). Gemini / AI features from 
 
 - Supabase project shared with teampulse-app (see `reference/lib/supabase.ts`)
 - Data access: PostgREST + Auth HTTP from `modSupabase` / `modDb` / `modAuth`
+- Training log needs [`reference/supabase_training_sessions.sql`](reference/supabase_training_sessions.sql) applied once in the Supabase SQL editor
 
 ## Module map
 
 ```
-Login → Dashboard → Clubs / Matches / Stats
+Login → Dashboard → Clubs / Matches / Training / Stats
                  ↘ ClubMembers
-Matches → MatchPrep (lineup + sub plan) → LiveFeed
+Matches → MatchPrep (lineup + sub plan; coaches can share a PDF sheet) → LiveFeed
 ```
 
 Shared: `modSupabase`, `modAuth`, `modDb`, `modFormations`, `modSubPlanner`, `modStats`, `modAppState`.

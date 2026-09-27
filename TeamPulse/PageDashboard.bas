@@ -13,6 +13,7 @@ Sub Class_Globals
 	Private itemValues As List
 	Private pollTimer As Timer
 	Private pageVisible As Boolean
+	Private exporting As Boolean
 End Sub
 
 Public Sub Initialize
@@ -22,7 +23,6 @@ End Sub
 
 Private Sub B4XPage_Created (Root1 As B4XView)
 	Root = Root1
-	Root.Color = modConfig.COLOR_SURFACE
 	BuildUI
 	pollTimer.Initialize("pollTimer", 15000)
 	pollTimer.Enabled = False
@@ -46,54 +46,53 @@ Private Sub pollTimer_Tick
 End Sub
 
 Private Sub BuildUI
-	Dim bar As Panel
-	bar.Initialize("")
-	bar.Color = modConfig.COLOR_PRIMARY
-	Root.AddView(bar, 0, 0, Root.Width, 96dip)
+	Root.Color = modConfig.COLOR_DARK_BG
 	
-	lblHello.Initialize("")
-	lblHello.TextColor = Colors.White
+	lblHello.Initialize("lblHello")
+	lblHello.TextColor = modConfig.COLOR_DARK_TEXT
 	lblHello.TextSize = 18
+	lblHello.SingleLine = True
 	lblHello.Typeface = Typeface.DEFAULT_BOLD
-	bar.AddView(lblHello, 16dip, 40dip, Root.Width - 128dip, 40dip)
+	lblHello.Gravity = Gravity.CENTER_VERTICAL
+	Root.AddView(lblHello, 16dip, 10dip, Root.Width - 72dip, 44dip)
 	
-	Dim btnRefresh As Button
-	btnRefresh.Initialize("btnRefresh")
-	btnRefresh.Text = "Refresh"
-	btnRefresh.Color = modConfig.COLOR_ACCENT
-	btnRefresh.TextColor = Colors.White
-	Root.AddView(btnRefresh, Root.Width - 112dip, 28dip, 96dip, 40dip)
+	Dim btnRefresh As Button = modUI.CreateChromeIconButton("btnRefresh", "↻", Colors.Transparent, Colors.White)
+	btnRefresh.TextSize = 24
+	Root.AddView(btnRefresh, Root.Width - 52dip, 10dip, 44dip, 44dip)
 	
 	Dim nav As Panel
 	nav.Initialize("")
-	nav.Color = Colors.White
+	nav.Color = modConfig.COLOR_DARK_CARD
 	Root.AddView(nav, 0, Root.Height - 64dip, Root.Width, 64dip)
 	AddNavBtn(nav, 0, "Clubs", "btnClubs")
 	AddNavBtn(nav, 1, "Matches", "btnMatches")
-	AddNavBtn(nav, 2, "Stats", "btnStats")
-	AddNavBtn(nav, 3, "Out", "btnOut")
+	AddNavBtn(nav, 2, "Training", "btnTraining")
+	AddNavBtn(nav, 3, "Stats", "btnStats")
+	AddNavBtn(nav, 4, "Out", "btnOut")
 	
 	sv.Initialize(Root.Height)
-	Root.AddView(sv, 0, 96dip, Root.Width, Root.Height - 96dip - 64dip)
+	Root.AddView(sv, 0, 56dip, Root.Width, Root.Height - 56dip - 64dip)
 	content = sv.Panel
-	content.Color = modConfig.COLOR_SURFACE
+	content.Color = modConfig.COLOR_DARK_BG
 End Sub
 
 Private Sub AddNavBtn(parent As Panel, index As Int, text As String, event As String)
-	Dim w As Int = parent.Width / 4
+	Dim w As Int = parent.Width / 5
 	Dim b As Button
 	b.Initialize(event)
 	b.Text = text
-	b.TextSize = 12
-	b.Color = Colors.White
-	b.TextColor = modConfig.COLOR_PRIMARY
+	b.TextSize = 11
+	Dim cd As ColorDrawable
+	cd.Initialize(Colors.Transparent, 0)
+	b.Background = cd
+	b.TextColor = modConfig.COLOR_DARK_TEXT
 	parent.AddView(b, index * w, 8dip, w, 48dip)
 End Sub
 
 Public Sub Refresh
 	Dim name As String = "Coach"
 	If modAppState.IsAuthenticated Then name = modAppState.CurrentUser.GetDefault("name", "Coach")
-	lblHello.Text = "Hi, " & name
+	lblHello.Text = "Hi, " & name & RoleSuffix()
 	
 	content.RemoveAllViews
 	itemValues.Clear
@@ -121,7 +120,7 @@ Public Sub Refresh
 		y = y + modUI.LiveBannerHeight + gap
 	End If
 	
-	Dim hdr1 As Panel = modUI.CreateSectionHeader(cardW, "Live & upcoming matches")
+	Dim hdr1 As Panel = modUI.CreateSectionHeaderThemed(cardW, "Live & upcoming matches", True)
 	content.AddView(hdr1, 12dip, y, cardW, modUI.SectionHeaderHeight)
 	y = y + modUI.SectionHeaderHeight + 4dip
 	
@@ -131,7 +130,7 @@ Public Sub Refresh
 		Dim st As String = m.GetDefault("status", "")
 		If st = "LIVE" Or st = "UPCOMING" Then
 			any = True
-			Dim card As Panel = modUI.CreateMatchCard(cardW, m, "card")
+			Dim card As Panel = modUI.CreateMatchCardThemed(cardW, m, "card", True)
 			Dim idx As Int = itemValues.Size
 			itemValues.Add(m.Get("id"))
 			card.Tag = idx
@@ -140,30 +139,50 @@ Public Sub Refresh
 		End If
 	Next
 	If any = False Then
-		Dim empty As Panel = modUI.CreateSimpleRow(cardW, "No upcoming matches. Create one under Matches.", "")
+		Dim empty As Panel = modUI.CreateSimpleRowThemed(cardW, "No upcoming matches. Create one under Matches.", "", True)
 		content.AddView(empty, 12dip, y, cardW, modUI.SimpleRowHeight)
 		y = y + modUI.SimpleRowHeight + gap
 	End If
 	
-	Dim hdr2 As Panel = modUI.CreateSectionHeader(cardW, "Your clubs")
+	Dim hdr2 As Panel = modUI.CreateSectionHeaderThemed(cardW, "Your clubs", True)
 	content.AddView(hdr2, 12dip, y, cardW, modUI.SectionHeaderHeight)
 	y = y + modUI.SectionHeaderHeight + 4dip
 	
 	Dim myClubs As List = modAppState.ClubsForCurrentUser
 	If myClubs.Size = 0 Then
-		Dim emptyClub As Panel = modUI.CreateSimpleRow(cardW, "You are not in a club yet. Join or create one.", "")
+		Dim emptyClub As Panel = modUI.CreateSimpleRowThemed(cardW, "You are not in a club yet. Join or create one.", "", True)
 		content.AddView(emptyClub, 12dip, y, cardW, modUI.SimpleRowHeight)
 		y = y + modUI.SimpleRowHeight + gap
 	Else
 		For i = 0 To myClubs.Size - 1
 			Dim c As Map = myClubs.Get(i)
-			Dim row As Panel = modUI.CreateSimpleRow(cardW, c.GetDefault("name", "Club") & "  ·  " & c.GetDefault("type", ""), "card")
+			Dim row As Panel = modUI.CreateSimpleRowThemed(cardW, c.GetDefault("name", "Club") & "  ·  " & c.GetDefault("type", ""), "card", True)
 			Dim cIdx As Int = itemValues.Size
 			itemValues.Add("club:" & c.Get("id"))
 			row.Tag = cIdx
 			content.AddView(row, 12dip, y, cardW, modUI.SimpleRowHeight)
 			y = y + modUI.SimpleRowHeight + gap
 		Next
+	End If
+	If modExport.UserCanExport Then
+		Dim btnExport As Button
+		btnExport.Initialize("btnExport")
+		btnExport.Text = "Export spreadsheet"
+		btnExport.TextColor = Colors.White
+		btnExport.TextSize = 15
+		Dim exportBg As ColorDrawable
+		exportBg.Initialize(modConfig.COLOR_ACCENT, 8dip)
+		btnExport.Background = exportBg
+		content.AddView(btnExport, 12dip, y, cardW, 48dip)
+		y = y + 48dip + 4dip
+		Dim exportHint As Label
+		exportHint.Initialize("")
+		exportHint.Text = "Players, matches, events, and season stats. Nothing is changed."
+		exportHint.TextColor = modConfig.COLOR_DARK_MUTED
+		exportHint.TextSize = 12
+		exportHint.Gravity = Gravity.CENTER
+		content.AddView(exportHint, 12dip, y, cardW, 28dip)
+		y = y + 28dip + gap
 	End If
 	content.Height = Max(y + 16dip, sv.Height)
 End Sub
@@ -189,12 +208,65 @@ Private Sub card_Click
 	End If
 End Sub
 
+Private Sub RoleSuffix As String
+	If modAppState.IsAuthenticated = False Then Return ""
+	Dim roles As Object = modAppState.CurrentUser.GetDefault("roles", Null)
+	Dim hasPlayer As Boolean = modDb.RoleListHas(roles, "PLAYER")
+	Dim hasCoach As Boolean = modDb.RoleListHas(roles, "COACH")
+	Dim clubs As List = modAppState.ClubsForCurrentUser
+	Dim uid As String = modAppState.CurrentUser.GetDefault("id", "")
+	Dim ci As Int
+	For ci = 0 To clubs.Size - 1
+		Dim c As Map = clubs.Get(ci)
+		Dim memObj As Object = c.GetDefault("members", Null)
+		If (memObj Is List) = False Then Continue
+		Dim members As List = memObj
+		Dim mi As Int
+		For mi = 0 To members.Size - 1
+			Dim m As Map = members.Get(mi)
+			If m.GetDefault("id", "") <> uid Then Continue
+			If modDb.RoleListHas(m.GetDefault("roles", Null), "PLAYER") Then hasPlayer = True
+			If modDb.RoleListHas(m.GetDefault("roles", Null), "COACH") Then hasCoach = True
+		Next
+	Next
+	If hasCoach And hasPlayer Then Return "  ·  Coach, Player"
+	If hasCoach Then Return "  ·  Coach"
+	If hasPlayer Then Return "  ·  Player"
+	Return ""
+End Sub
+
+Private Sub lblHello_Click
+	If modAppState.IsAuthenticated = False Then Return
+	Dim clubs As List = modAppState.ClubsForCurrentUser
+	If clubs.Size = 0 Then
+		ToastMessageShow("Join a club before changing your role", False)
+		Return
+	End If
+	Dim club As Map = clubs.Get(0)
+	Dim i As Int
+	For i = 0 To clubs.Size - 1
+		Dim c As Map = clubs.Get(i)
+		If c.GetDefault("id", "") = modAppState.SelectedClubId Then
+			club = c
+			Exit
+		End If
+	Next
+	modAppState.SelectedClubId = club.Get("id")
+	modAppState.SelectedPlayerId = modAppState.CurrentUser.GetDefault("id", "")
+	modAppState.PlayerEditReturnPage = "Dashboard"
+	B4XPages.ShowPage("PlayerEdit")
+End Sub
+
 Private Sub btnClubs_Click
 	B4XPages.ShowPage("Clubs")
 End Sub
 
 Private Sub btnMatches_Click
 	B4XPages.ShowPage("Matches")
+End Sub
+
+Private Sub btnTraining_Click
+	B4XPages.ShowPage("Training")
 End Sub
 
 Private Sub btnStats_Click
@@ -211,4 +283,20 @@ Private Sub btnRefresh_Click
 	modDb.FetchInitialData
 	ProgressDialogHide
 	Refresh
+End Sub
+
+Private Sub btnExport_Click
+	If exporting Then Return
+	exporting = True
+	ProgressDialogShow2("Building spreadsheet...", False)
+	Dim built As Map = modExport.BuildFile
+	ProgressDialogHide
+	If built.GetDefault("ok", False) = False Then
+		exporting = False
+		xui.MsgboxAsync(built.GetDefault("message", "Could not create the spreadsheet. Nothing was changed."), "Export")
+		Return
+	End If
+	Dim shareErr As String = modExport.ShareFile(built.GetDefault("dir", ""), built.GetDefault("file", ""))
+	exporting = False
+	If shareErr <> "" Then xui.MsgboxAsync(shareErr, "Export")
 End Sub

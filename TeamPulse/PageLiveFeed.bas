@@ -18,13 +18,33 @@ Sub Class_Globals
 	Private pageVisible As Boolean
 	Private memberNames As List
 	Private memberIds As List
+	Private memberAvatars As Map
 	Private dialog As B4XDialog
+	Private subSheet As Panel
+	Private subPitch As Panel
+	Private chipHost As Panel
+	Private benchScroll As ScrollView
+	Private benchHost As Panel
+	Private subHint As Label
+	Private subOffSlot As String
+	Private subOffPlayer As String
+	Private subSheetOpen As Boolean
+	Private sheetMode As String
+	Private sheetChips As List
+	Private sheetIncludePlayers As Boolean
+	Private pickExclude As String
+	Private pickOpen As Boolean
+	Private showPitch As Boolean
+	Private sheetTitle As String
 End Sub
 
 Public Sub Initialize
 	pageVisible = False
 	memberNames.Initialize
 	memberIds.Initialize
+	memberAvatars.Initialize
+	sheetChips.Initialize
+	sheetMode = ""
 End Sub
 
 Private Sub B4XPage_Created (Root1 As B4XView)
@@ -33,7 +53,7 @@ Private Sub B4XPage_Created (Root1 As B4XView)
 	dialog.Initialize(Root)
 	StyleDarkDialog
 	BuildUI
-	pollTimer.Initialize("pollTimer", 10000)
+	pollTimer.Initialize("pollTimer", 20000)
 	pollTimer.Enabled = False
 End Sub
 
@@ -47,52 +67,53 @@ End Sub
 Private Sub B4XPage_Disappear
 	pageVisible = False
 	pollTimer.Enabled = False
+	CloseSubSheet
 End Sub
 
 Private Sub pollTimer_Tick
 	If pageVisible = False Then Return
-	modDb.FetchInitialData
-	match = modAppState.FindMatch(modAppState.SelectedMatchId)
-	Refresh
+	CallSubDelayed(B4XPages.MainPage, "KickSyncAndPull")
 End Sub
 
 Private Sub BuildUI
+	Dim chrome As Map = modUI.AddPageChrome(Root, "Live", "btnBack", "", "", True)
+	Dim top As Int = chrome.Get("ContentTop")
 	lblStatus.Initialize("")
 	lblStatus.TextColor = 0xFF94A3B8
 	lblStatus.Gravity = Gravity.CENTER
-	Root.AddView(lblStatus, 0, 8dip, Root.Width, 22dip)
+	Root.AddView(lblStatus, 0, top, Root.Width, 22dip)
 	
 	lblScore.Initialize("")
 	lblScore.TextColor = Colors.White
 	lblScore.TextSize = 36
 	lblScore.Typeface = Typeface.DEFAULT_BOLD
 	lblScore.Gravity = Gravity.CENTER
-	Root.AddView(lblScore, 0, 32dip, Root.Width, 52dip)
+	Root.AddView(lblScore, 0, top + 24dip, Root.Width, 52dip)
 	
 	lblClock.Initialize("")
 	lblClock.TextColor = modConfig.COLOR_ACCENT
 	lblClock.TextSize = 14
 	lblClock.Typeface = Typeface.DEFAULT_BOLD
 	lblClock.Gravity = Gravity.CENTER
-	Root.AddView(lblClock, 0, 84dip, Root.Width, 22dip)
+	Root.AddView(lblClock, 0, top + 76dip, Root.Width, 22dip)
 	
-	Dim row As Int = 116dip
+	Dim row As Int = top + 106dip
 	AddAction("GOAL", "btnGoal", 8dip, row, modConfig.COLOR_SUCCESS)
 	AddAction("SUB", "btnSub", Root.Width / 4 + 4dip, row, modConfig.COLOR_ACCENT)
 	AddAction("YC", "btnYC", Root.Width / 2 + 4dip, row, 0xFFF59E0B)
 	AddAction("RC", "btnRC", Root.Width * 3 / 4 + 4dip, row, modConfig.COLOR_DANGER)
 	
-	row = 168dip
+	row = top + 158dip
 	AddAction("HT", "btnHT", 8dip, row, 0xFFFB923C)
 	AddAction("2H", "btn2H", Root.Width / 4 + 4dip, row, 0xFF38BDF8)
-	AddAction("END", "btnEnd", Root.Width / 2 + 4dip, row, 0xFF64748B)
+	AddAction("Full time", "btnEnd", Root.Width / 2 + 4dip, row, 0xFF64748B)
 	AddAction("RESET", "btnReset", Root.Width * 3 / 4 + 4dip, row, 0xFF334155)
 	
-	row = 220dip
+	row = top + 210dip
 	AddAction("NOTE", "btnComment", 8dip, row, 0xFF6366F1)
-	AddAction("Back", "btnBack", Root.Width / 4 + 4dip, row, 0xFF475569)
 	
-	clv = modUI.AddCustomListViewThemed(Root, 0, 276dip, Root.Width, Root.Height - 284dip, Me, "clv", True)
+	Dim listTop As Int = top + 262dip
+	clv = modUI.AddCustomListViewThemed(Root, 0, listTop, Root.Width, Root.Height - listTop - 8dip, Me, "clv", True)
 End Sub
 
 Private Sub AddAction(text As String, event As String, left As Int, top As Int, col As Int)
@@ -100,8 +121,12 @@ Private Sub AddAction(text As String, event As String, left As Int, top As Int, 
 	b.Initialize(event)
 	b.Text = text
 	b.TextSize = 11
+	If text.Length > 6 Then b.TextSize = 10
+	b.SingleLine = False
 	b.Color = col
 	b.TextColor = Colors.White
+	b.Gravity = Gravity.CENTER
+	b.Padding = Array As Int(2dip, 0, 2dip, 0)
 	Root.AddView(b, left, top, Root.Width / 4 - 12dip, 44dip)
 End Sub
 
@@ -114,12 +139,15 @@ End Sub
 Private Sub BuildMemberLists
 	memberNames.Initialize
 	memberIds.Initialize
+	memberAvatars.Initialize
 	Dim members As List = club.GetDefault("members", EmptyList)
 	Dim i As Int
 	For i = 0 To members.Size - 1
 		Dim mem As Map = members.Get(i)
+		Dim mid As String = mem.GetDefault("id", "")
 		memberNames.Add(mem.GetDefault("name", "?"))
-		memberIds.Add(mem.GetDefault("id", ""))
+		memberIds.Add(mid)
+		memberAvatars.Put(mid, mem.GetDefault("avatar", ""))
 	Next
 End Sub
 
@@ -131,7 +159,11 @@ End Sub
 
 Public Sub Refresh
 	match = modAppState.FindMatch(modAppState.SelectedMatchId)
-	lblStatus.Text = match.GetDefault("status", "") & " - " & match.GetDefault("title", "")
+	If match.IsInitialized = False Or match.ContainsKey("id") = False Then Return
+	If modLocal.ApplyLiveScore(match) Then modLocal.QueueMatch(match)
+	' Sync can finish before this page is opened. Score is already saved; skip the views.
+	If lblStatus.IsInitialized = False Then Return
+	lblStatus.Text = match.GetDefault("status", "") & "  ·  " & modLocal.SyncWord(match.Get("id"))
 	lblScore.Text = match.GetDefault("scoreA", 0) & "  -  " & match.GetDefault("scoreB", 0)
 	Dim nowMs As Long = DateTime.Now
 	lblClock.Text = modAppState.FormatHHMM(nowMs) & "   ·   " & modAppState.PlayingMinuteAt(match, nowMs) & "'"
@@ -240,13 +272,14 @@ Private Sub StampTimeDetails(details As Map)
 	details.Put("minute", modAppState.PlayingMinuteAt(match, nowMs))
 End Sub
 
-Private Sub AddEvent(etype As String, content As String, details As Map)
+Private Sub AddEvent(etype As String, content As String, details As Map) As String
 	If details.ContainsKey("minute") = False Or details.ContainsKey("clockTime") = False Then
 		StampTimeDetails(details)
 	End If
+	Dim eid As String = modAppState.NewId
 	Dim ev As Map
 	ev.Initialize
-	ev.Put("id", modAppState.NewId)
+	ev.Put("id", eid)
 	ev.Put("matchId", match.Get("id"))
 	ev.Put("userId", modAppState.CurrentUser.GetDefault("id", ""))
 	ev.Put("userName", modAppState.CurrentUser.GetDefault("name", ""))
@@ -257,96 +290,64 @@ Private Sub AddEvent(etype As String, content As String, details As Map)
 	modDb.SaveEvent(ev)
 	modAppState.UpsertEvent(ev)
 	Refresh
-End Sub
-
-' Returns selected index, or -1 if cancelled.
-Private Sub PickFromList(title As String, items As List) As ResumableSub
-	If items.IsInitialized = False Or items.Size = 0 Then Return -1
-	StyleDarkDialog
-	Dim template As B4XListTemplate
-	template.Initialize
-	' Colours must be set before Options so text items pick them up.
-	Try
-		template.CustomListView1.DefaultTextColor = Colors.White
-		template.CustomListView1.DefaultTextBackgroundColor = 0xFF1E293B
-		template.CustomListView1.PressedColor = 0xFF3B82F6
-	Catch
-		Log("ListTemplate colors: " & LastException.Message)
-	End Try
-	template.Options = items
-	template.AllowMultiSelection = False
-	Try
-		Dim listH As Int = Min(Root.Height * 0.55, 72dip + items.Size * 52dip)
-		template.Resize(Root.Width - 48dip, Max(180dip, listH))
-	Catch
-		Log("ListTemplate resize: " & LastException.Message)
-	End Try
-	Try
-		modUI.ApplyDarkListBackground(template.CustomListView1, 0xFF1E293B)
-	Catch
-		Log("ListTemplate dark bg: " & LastException.Message)
-	End Try
-	dialog.Title = title
-	Wait For (dialog.ShowTemplate(template, "OK", "", "Cancel")) Complete (Result As Int)
-	If Result <> xui.DialogResponse_Positive Then Return -1
-	Dim selected As String = template.SelectedItem
-	If selected = "" Then Return -1
-	Dim i As Int
-	For i = 0 To items.Size - 1
-		If items.Get(i) = selected Then Return i
-	Next
-	Return -1
+	Return eid
 End Sub
 
 Private Sub btnGoal_Click
-	Dim teamOpts As List
-	teamOpts.Initialize
-	teamOpts.Add("Our team")
-	teamOpts.Add("Opponent")
-	Wait For (PickFromList("Who scored?", teamOpts)) Complete (teamIdx As Int)
-	If teamIdx < 0 Then Return
+	Dim teamChips As List = ChipList(Array As String("our", "Our team", "opp", "Opponent"))
+	Wait For (ShowPick("Who scored?", teamChips, False, "")) Complete (team As String)
+	If team = "" Then Return
 	
 	Dim details As Map
 	details.Initialize
 	StampTimeDetails(details)
 	Dim content As String
 	
-	If teamIdx = 0 Then
-		details.Put("team", "A")
+	If team = "opp" Then
+		Dim oppChips As List = ChipList(Array As String("owngoal", "Own goal", "oppgoal", "Opposition goal"))
+		Wait For (ShowPick("Goal type", oppChips, False, "")) Complete (kind As String)
+		If kind = "" Then Return
+		details.Put("team", "B")
+		details.Put("scorer", "")
+		details.Put("assist", "")
+		details.Put("assistUnknown", False)
+		If kind = "owngoal" Then
+			details.Put("ownGoal", True)
+			content = "Own goal"
+		Else
+			details.Put("ownGoal", False)
+			content = "Opposition goal"
+		End If
+	Else
 		If memberNames.Size = 0 Then
 			ToastMessageShow("No players in club", False)
 			Return
 		End If
-		Wait For (PickFromList("Who scored?", memberNames)) Complete (scorerIdx As Int)
-		If scorerIdx < 0 Then Return
-		Dim scorerId As String = memberIds.Get(scorerIdx)
-		Dim scorerName As String = memberNames.Get(scorerIdx)
-		details.Put("scorer", scorerId)
-		
-		Dim assistOpts As List
-		assistOpts.Initialize
-		assistOpts.Add("(no assist)")
-		Dim ai As Int
-		For ai = 0 To memberNames.Size - 1
-			assistOpts.Add(memberNames.Get(ai))
-		Next
-		Wait For (PickFromList("Who assisted?", assistOpts)) Complete (assistIdx As Int)
-		If assistIdx < 0 Then Return
-		Dim assistId As String = ""
-		If assistIdx > 0 Then
-			assistId = memberIds.Get(assistIdx - 1)
-			If assistId = scorerId Then
-				ToastMessageShow("Assist can't be the scorer", False)
-				assistId = ""
+		Dim scorerChips As List = ChipList(Array As String("owngoal", "Own goal"))
+		Wait For (ShowPick("Who scored?", scorerChips, True, "")) Complete (scorerId As String)
+		If scorerId = "" Then Return
+		details.Put("team", "A")
+		If scorerId = "owngoal" Then
+			details.Put("ownGoal", True)
+			details.Put("scorer", "")
+			details.Put("assist", "")
+			details.Put("assistUnknown", False)
+			content = "Own goal"
+		Else
+			Dim assistChips As List = ChipList(Array As String("none", "No assist", "unknown", "Unknown"))
+			Wait For (ShowPick("Who assisted?", assistChips, True, scorerId)) Complete (assistId As String)
+			If assistId = "" Then Return
+			details.Put("ownGoal", False)
+			details.Put("scorer", scorerId)
+			details.Put("assist", "")
+			details.Put("assistUnknown", False)
+			If assistId = "unknown" Then
+				details.Put("assistUnknown", True)
+			Else If assistId <> "none" Then
+				details.Put("assist", assistId)
 			End If
+			content = "GOAL! " & NameForId(scorerId)
 		End If
-		details.Put("assist", assistId)
-		content = "GOAL! " & scorerName
-	Else
-		details.Put("team", "B")
-		details.Put("scorer", "")
-		details.Put("assist", "")
-		content = "GOAL! Opponent"
 	End If
 	
 	AddEvent("GOAL", content, details)
@@ -355,57 +356,63 @@ Private Sub btnGoal_Click
 End Sub
 
 Private Sub btnSub_Click
-	If memberNames.Size < 2 Then
+	If subSheetOpen Then Return
+	match = modAppState.FindMatch(modAppState.SelectedMatchId)
+	If memberIds.Size < 2 Then
 		ToastMessageShow("Need at least 2 players", False)
 		Return
 	End If
-	Wait For (PickFromList("Player off", memberNames)) Complete (outIdx As Int)
-	If outIdx < 0 Then Return
-	Wait For (PickFromList("Player on", memberNames)) Complete (inIdx As Int)
-	If inIdx < 0 Then Return
-	If outIdx = inIdx Then
-		ToastMessageShow("Pick different players", False)
-		Return
-	End If
+	sheetMode = "sub"
+	sheetChips.Initialize
+	sheetIncludePlayers = True
+	subOffSlot = ""
+	subOffPlayer = ""
+	OpenSubSheet
+End Sub
+
+Private Sub OccupiedSlots(pitch As Map) As Int
+	Dim n As Int = 0
+	If pitch.IsInitialized = False Then Return 0
+	Dim i As Int
+	For i = 0 To pitch.Size - 1
+		Dim pid As String = "" & pitch.GetValueAt(i)
+		If pid <> "" And pid <> "null" Then n = n + 1
+	Next
+	Return n
+End Sub
+
+Private Sub LogSub(playerOut As String, playerIn As String, outName As String, inName As String)
 	Dim details As Map
 	details.Initialize
 	details.Put("team", "A")
-	details.Put("playerOut", memberIds.Get(outIdx))
-	details.Put("playerIn", memberIds.Get(inIdx))
+	details.Put("playerOut", playerOut)
+	details.Put("playerIn", playerIn)
 	StampTimeDetails(details)
-	AddEvent("SUB", memberNames.Get(outIdx) & " → " & memberNames.Get(inIdx), details)
+	AddEvent("SUB", outName & " → " & inName, details)
 End Sub
 
 Private Sub btnYC_Click
-	If memberNames.Size = 0 Then
-		ToastMessageShow("No players", False)
-		Return
-	End If
-	Wait For (PickFromList("Yellow card for", memberNames)) Complete (idx As Int)
-	If idx < 0 Then Return
+	Wait For (ShowPick("Yellow card", EmptyChipList, True, "")) Complete (pid As String)
+	If pid = "" Then Return
 	Dim details As Map
 	details.Initialize
 	details.Put("team", "A")
-	details.Put("player", memberIds.Get(idx))
+	details.Put("player", pid)
 	StampTimeDetails(details)
-	AddEvent("YELLOW_CARD", memberNames.Get(idx), details)
+	AddEvent("YELLOW_CARD", NameForId(pid), details)
 	RecomputeScoresAndStats
 	Refresh
 End Sub
 
 Private Sub btnRC_Click
-	If memberNames.Size = 0 Then
-		ToastMessageShow("No players", False)
-		Return
-	End If
-	Wait For (PickFromList("Red card for", memberNames)) Complete (idx As Int)
-	If idx < 0 Then Return
+	Wait For (ShowPick("Red card", EmptyChipList, True, "")) Complete (pid As String)
+	If pid = "" Then Return
 	Dim details As Map
 	details.Initialize
 	details.Put("team", "A")
-	details.Put("player", memberIds.Get(idx))
+	details.Put("player", pid)
 	StampTimeDetails(details)
-	AddEvent("RED_CARD", memberNames.Get(idx), details)
+	AddEvent("RED_CARD", NameForId(pid), details)
 	RecomputeScoresAndStats
 	Refresh
 End Sub
@@ -425,35 +432,47 @@ Private Sub btn2H_Click
 End Sub
 
 Private Sub btnEnd_Click
+	modLocal.ApplyLiveScore(match)
 	match.Put("status", "COMPLETED")
-	ApplyProjectedMinutesToStats
-	modDb.SaveMatch(match)
-	modAppState.UpsertMatch(match)
 	Dim details As Map
 	details.Initialize
 	StampTimeDetails(details)
+	' Full-time has to be on the feed before minutes are measured, otherwise
+	' the whistle is missing and everyone is capped short of the match.
 	AddEvent("END", "Full Time " & match.GetDefault("scoreA", 0) & "-" & match.GetDefault("scoreB", 0), details)
-	ToastMessageShow("Match completed — add post-match summary", False)
-	B4XPages.ShowPage("MatchSummary")
+	ApplyProjectedMinutesToStats
+	modDb.SaveMatch(match)
+	modAppState.UpsertMatch(match)
+	ToastMessageShow("Full time. Add the summary later from the match page.", False)
+	Refresh
 End Sub
 
 Private Sub btnComment_Click
+	' Custom note dialog — avoids B4XInputTemplate "Explanation" label.
 	StyleDarkDialog
-	Dim input As B4XInputTemplate
-	input.Initialize
-	input.Text = ""
-	dialog.Title = "General commentary"
-	Wait For (dialog.ShowTemplate(input, "Save", "", "Cancel")) Complete (Result As Int)
+	Dim pnl As B4XView = xui.CreatePanel("")
+	pnl.SetLayoutAnimated(0, 0, 0, 320dip, 180dip)
+	pnl.Color = modConfig.COLOR_DARK_CARD
+	Dim edt As EditText
+	edt.Initialize("")
+	modUI.StyleEditTextDark(edt, "Write a note…")
+	edt.SingleLine = False
+	edt.Gravity = Bit.Or(Gravity.TOP, Gravity.LEFT)
+	pnl.AddView(edt, 12dip, 12dip, 296dip, 150dip)
+	dialog.Title = "Match note"
+	Wait For (dialog.ShowCustom(pnl, "Save", "", "Cancel")) Complete (Result As Int)
 	If Result <> xui.DialogResponse_Positive Then Return
-	Dim note As String = input.Text.Trim
+	Dim note As String = edt.Text.Trim
 	If note = "" Then
-		ToastMessageShow("Enter some commentary", False)
+		ToastMessageShow("Enter some text", False)
 		Return
 	End If
 	Dim details As Map
 	details.Initialize
 	StampTimeDetails(details)
-	AddEvent("COMMENT", note, details)
+	Dim eid As String = AddEvent("COMMENT", note, details)
+	modAppState.SelectedEventId = eid
+	B4XPages.ShowPage("EventEdit")
 End Sub
 Private Sub ApplyProjectedMinutesToStats
 	Dim calculated As Map = modAppState.CalculateMatchMinutes(match)
@@ -539,8 +558,10 @@ Public Sub RecomputeScoresAndStats
 				scoreB = scoreB + 1
 			Else
 				scoreA = scoreA + 1
-				BumpStatMap(stats, details.GetDefault("scorer", ""), "goals", 1)
-				BumpStatMap(stats, details.GetDefault("assist", ""), "assists", 1)
+				If modLocal.IsOwnGoal(details) = False Then
+					BumpStatMap(stats, details.GetDefault("scorer", ""), "goals", 1)
+					BumpStatMap(stats, details.GetDefault("assist", ""), "assists", 1)
+				End If
 			End If
 		Else If etype = "YELLOW_CARD" Then
 			BumpStatMap(stats, details.GetDefault("player", ""), "yellowCards", 1)
@@ -548,26 +569,51 @@ Public Sub RecomputeScoresAndStats
 			BumpStatMap(stats, details.GetDefault("player", ""), "redCards", 1)
 		End If
 	Next
-	Dim oldStats As Map = match.GetDefault("playerStats", EmptyMap2)
-	If oldStats.IsInitialized Then
-		For Each pid As String In oldStats.Keys
-			Dim oldPs As Map = oldStats.Get(pid)
-			Dim mins As Int = oldPs.GetDefault("minutesPlayed", 0)
-			If mins > 0 Then
-				Dim ps As Map
-				If stats.ContainsKey(pid) Then
-					ps = stats.Get(pid)
-				Else
-					ps.Initialize
-					ps.Put("goals", 0)
-					ps.Put("assists", 0)
-					ps.Put("yellowCards", 0)
-					ps.Put("redCards", 0)
-				End If
-				ps.Put("minutesPlayed", mins)
-				stats.Put(pid, ps)
+	Dim calculated As Map = modAppState.CalculateMatchMinutes(match)
+	If calculated.IsInitialized And calculated.Size > 0 Then
+		For Each pid As String In calculated.Keys
+			Dim mins As Int = 0
+			Try
+				mins = calculated.Get(pid)
+			Catch
+				mins = 0
+			End Try
+			If mins <= 0 Then Continue
+			Dim ps As Map
+			If stats.ContainsKey(pid) Then
+				ps = stats.Get(pid)
+			Else
+				ps.Initialize
+				ps.Put("goals", 0)
+				ps.Put("assists", 0)
+				ps.Put("yellowCards", 0)
+				ps.Put("redCards", 0)
 			End If
+			ps.Put("minutesPlayed", mins)
+			stats.Put(pid, ps)
 		Next
+	Else
+		Dim oldStats As Map = match.GetDefault("playerStats", EmptyMap2)
+		If oldStats.IsInitialized Then
+			For Each pid As String In oldStats.Keys
+				Dim oldPs As Map = oldStats.Get(pid)
+				Dim mins As Int = oldPs.GetDefault("minutesPlayed", 0)
+				If mins > 0 Then
+					Dim ps As Map
+					If stats.ContainsKey(pid) Then
+						ps = stats.Get(pid)
+					Else
+						ps.Initialize
+						ps.Put("goals", 0)
+						ps.Put("assists", 0)
+						ps.Put("yellowCards", 0)
+						ps.Put("redCards", 0)
+					End If
+					ps.Put("minutesPlayed", mins)
+					stats.Put(pid, ps)
+				End If
+			Next
+		End If
 	End If
 	match.Put("scoreA", scoreA)
 	match.Put("scoreB", scoreB)
@@ -597,4 +643,388 @@ Private Sub EmptyMap2 As Map
 	Dim m As Map
 	m.Initialize
 	Return m
+End Sub
+
+Private Sub ShowPick(title As String, chips As List, includePlayers As Boolean, excludeId As String) As ResumableSub
+	sheetMode = "pick"
+	sheetTitle = title
+	sheetChips = chips
+	sheetIncludePlayers = includePlayers
+	pickExclude = excludeId
+	subOffSlot = ""
+	subOffPlayer = ""
+	OpenSubSheet
+	Wait For PlayerPicked (choice As String)
+	Return choice
+End Sub
+
+Private Sub ChipList(pairs() As String) As List
+	Dim chips As List
+	chips.Initialize
+	Dim i As Int = 0
+	Do While i < pairs.Length - 1
+		Dim c As Map
+		c.Initialize
+		c.Put("id", pairs(i))
+		c.Put("label", pairs(i + 1))
+		chips.Add(c)
+		i = i + 2
+	Loop
+	Return chips
+End Sub
+
+Private Sub EmptyChipList As List
+	Dim chips As List
+	chips.Initialize
+	Return chips
+End Sub
+
+Private Sub OpenSubSheet
+	If subSheet.IsInitialized = False Then BuildSubSheet
+	subSheet.Elevation = 24dip
+	subSheet.Visible = True
+	subSheet.BringToFront
+	subSheetOpen = True
+	If sheetMode = "pick" Then pickOpen = True
+	DrawSheet
+End Sub
+
+Private Sub CloseSubSheet
+	If pickOpen Then
+		FinishPick("")
+		Return
+	End If
+	HideSubSheet
+End Sub
+
+Private Sub FinishPick(choice As String)
+	If pickOpen = False Then Return
+	pickOpen = False
+	HideSubSheet
+	CallSubDelayed2(Me, "PlayerPicked", choice)
+End Sub
+
+Private Sub HideSubSheet
+	subSheetOpen = False
+	subOffSlot = ""
+	subOffPlayer = ""
+	sheetMode = ""
+	If subSheet.IsInitialized Then subSheet.Visible = False
+End Sub
+
+Private Sub BuildSubSheet
+	subSheet.Initialize("")
+	subSheet.Color = 0xFF0F172A
+	subSheet.Elevation = 24dip
+	Root.AddView(subSheet, 0, 0, Root.Width, Root.Height)
+	Dim btnCancel As Button
+	btnCancel.Initialize("btnSubCancel")
+	btnCancel.Text = "Cancel"
+	btnCancel.TextColor = Colors.White
+	btnCancel.TextSize = 16
+	btnCancel.Color = 0xFF334155
+	subSheet.AddView(btnCancel, 12dip, 8dip, Root.Width - 24dip, 44dip)
+	subHint.Initialize("")
+	subHint.TextColor = Colors.White
+	subHint.TextSize = 16
+	subHint.Typeface = Typeface.DEFAULT_BOLD
+	subHint.Gravity = Gravity.CENTER
+	subSheet.AddView(subHint, 12dip, 56dip, Root.Width - 24dip, 28dip)
+	chipHost.Initialize("")
+	chipHost.Color = 0xFF0F172A
+	subSheet.AddView(chipHost, 0, 88dip, Root.Width, 0)
+	subPitch.Initialize("")
+	subPitch.Color = 0xFF166534
+	subSheet.AddView(subPitch, 8dip, 88dip, Root.Width - 16dip, 0)
+	benchScroll.Initialize(200dip)
+	benchScroll.Color = 0xFF0F172A
+	subSheet.AddView(benchScroll, 0, 88dip, Root.Width, 80dip)
+	benchScroll.Panel.Color = 0xFF0F172A
+	benchHost.Initialize("")
+	benchHost.Color = 0xFF0F172A
+	benchScroll.Panel.AddView(benchHost, 0, 0, Root.Width, 200dip)
+End Sub
+
+Private Sub DrawSheet
+	Dim lineup As Map
+	lineup.Initialize
+	If match.IsInitialized Then lineup = modAppState.LineupAfterSubs(match)
+	showPitch = False
+	If sheetMode = "sub" Or sheetIncludePlayers Then
+		If OccupiedSlots(lineup) > 0 Then showPitch = True
+	End If
+	If sheetMode = "pick" Then
+		subHint.Text = sheetTitle
+	Else If showPitch And subOffSlot = "" Then
+		subHint.Text = "Tap the player coming off"
+	Else If showPitch Then
+		subHint.Text = "Tap who is coming on"
+	Else If subOffPlayer = "" Then
+		subHint.Text = "Tap the player coming off"
+	Else
+		subHint.Text = "Tap who is coming on"
+	End If
+	Dim y As Int = 92dip
+	Dim chipH As Int = 0
+	If sheetChips.IsInitialized And sheetChips.Size > 0 Then chipH = 88dip
+	chipHost.SetLayout(0, y, Root.Width, chipH)
+	chipHost.Visible = chipH > 0
+	y = y + chipH
+	Dim pitchH As Int = 0
+	If showPitch Then
+		pitchH = Root.Height * 0.40
+		If pitchH < 220dip Then pitchH = 220dip
+	End If
+	subPitch.SetLayout(8dip, y, Root.Width - 16dip, pitchH)
+	subPitch.Visible = pitchH > 0
+	y = y + pitchH
+	Dim showBench As Boolean = sheetMode = "sub" Or sheetIncludePlayers
+	Dim benchH As Int = Root.Height - y
+	If benchH < 4dip Then benchH = 4dip
+	benchScroll.SetLayout(0, y, Root.Width, benchH)
+	benchScroll.Visible = showBench
+	DrawChips
+	If showPitch Then
+		If subPitch.Width > 2dip And subPitch.Height > 2dip Then DrawPitch(lineup)
+	End If
+	If showBench Then DrawBenchGrid
+End Sub
+
+Private Sub DrawChips
+	chipHost.RemoveAllViews
+	If sheetChips.IsInitialized = False Then Return
+	Dim size As Int = 64dip
+	Dim i As Int
+	For i = 0 To sheetChips.Size - 1
+		Dim c As Map = sheetChips.Get(i)
+		Dim left As Int = 8dip + i * (size + 12dip)
+		AddRoundSpot(chipHost, left, 8dip, size, "chip", c.GetDefault("id", ""), "", c.GetDefault("label", ""), False)
+	Next
+End Sub
+
+Private Sub DrawPitch(lineup As Map)
+	subPitch.RemoveAllViews
+	If subPitch.Width < 2dip Or subPitch.Height < 2dip Then Return
+	modUI.PaintPitchMarkings(subPitch)
+	Dim formName As String = ""
+	If match.IsInitialized Then formName = match.GetDefault("formation", "")
+	If formName = "" And club.IsInitialized Then formName = club.GetDefault("preferredFormation", "")
+	Dim positions As List = modFormations.GetPositions(formName)
+	Dim layout As Map
+	layout.Initialize
+	Dim planObj As Object = match.GetDefault("subPlan", Null)
+	If planObj <> Null And planObj Is Map Then
+		Dim plan As Map = planObj
+		Dim lay As Object = plan.GetDefault("layout", Null)
+		If lay <> Null And lay Is Map Then layout = lay
+	End If
+	Dim slotSize As Int = 52dip
+	Dim i As Int
+	For i = 0 To positions.Size - 1
+		Dim p As Map = positions.Get(i)
+		Dim posId As String = p.GetDefault("id", "")
+		Dim spread As Map = modFormations.DisplaySlot(p, layout)
+		Dim xPct As Float = spread.Get("x")
+		Dim yPct As Float = spread.Get("y")
+		Dim origin As Map = modUI.PitchSlotLeftTop(subPitch.Width, subPitch.Height, slotSize, xPct, yPct)
+		Dim pid As String = "" & lineup.GetDefault(posId, "")
+		Dim displayName As String = ""
+		If pid <> "" And pid <> "null" Then displayName = NameForId(pid)
+		AddRoundSpot(subPitch, origin.Get("left"), origin.Get("top"), slotSize, "slot", posId, displayName, p.GetDefault("label", ""), posId = subOffSlot)
+	Next
+End Sub
+
+Private Sub DrawBenchGrid
+	benchHost.RemoveAllViews
+	benchHost.Color = 0xFF0F172A
+	Dim ids As List = GridPlayerIds
+	If ids.Size = 0 Then
+		Dim lbl As Label
+		lbl.Initialize("")
+		lbl.Text = "No one else to pick"
+		lbl.TextColor = 0xFF94A3B8
+		lbl.TextSize = 14
+		lbl.Gravity = Gravity.CENTER
+		benchHost.AddView(lbl, 12dip, 8dip, benchScroll.Width - 24dip, 36dip)
+		SizeBench(52dip)
+		Return
+	End If
+	Dim cols As Int = 4
+	Dim size As Int = 56dip
+	Dim cellW As Int = benchScroll.Width / cols
+	If cellW < size + 8dip Then cellW = size + 8dip
+	Dim rowH As Int = size + 22dip
+	Dim col As Int = 0
+	Dim row As Int = 0
+	Dim i As Int
+	For i = 0 To ids.Size - 1
+		Dim pid As String = ids.Get(i)
+		AddRoundSpot(benchHost, col * cellW + 4dip, row * rowH + 4dip, size, "player", pid, NameForId(pid), "", pid = subOffPlayer)
+		col = col + 1
+		If col >= cols Then
+			col = 0
+			row = row + 1
+		End If
+	Next
+	Dim rows As Int = row
+	If col > 0 Then rows = rows + 1
+	SizeBench(rows * rowH + 12dip)
+End Sub
+
+' The scroll view's own panel uses Android frame params, so SetLayout on it crashes.
+Private Sub SizeBench(contentH As Int)
+	Dim w As Int = benchScroll.Width
+	If w < 2dip Then w = Root.Width
+	benchHost.SetLayout(0, 0, w, contentH)
+	benchScroll.Panel.Height = contentH
+End Sub
+
+Private Sub GridPlayerIds As List
+	Dim ids As List
+	ids.Initialize
+	Dim onPitch As Map
+	onPitch.Initialize
+	If showPitch And match.IsInitialized Then
+		Dim lineup As Map = modAppState.LineupAfterSubs(match)
+		Dim s As Int
+		For s = 0 To lineup.Size - 1
+			Dim onId As String = "" & lineup.GetValueAt(s)
+			If onId <> "" And onId <> "null" Then onPitch.Put(onId, True)
+		Next
+	End If
+	Dim availability As Map
+	availability.Initialize
+	If match.IsInitialized Then
+		Dim avObj As Object = match.GetDefault("availability", Null)
+		If avObj <> Null And avObj Is Map Then availability = avObj
+	End If
+	Dim confirmed As Int = 0
+	Dim i As Int
+	If sheetMode = "sub" And showPitch Then
+		For i = 0 To memberIds.Size - 1
+			If availability.GetDefault(memberIds.Get(i), "") = "CONFIRMED" Then confirmed = confirmed + 1
+		Next
+	End If
+	For i = 0 To memberIds.Size - 1
+		Dim id As String = memberIds.Get(i)
+		Dim skip As Boolean = False
+		If sheetMode = "pick" And id = pickExclude Then skip = True
+		If sheetMode = "sub" And showPitch = False And subOffPlayer <> "" And id = subOffPlayer Then skip = True
+		If onPitch.ContainsKey(id) Then skip = True
+		If confirmed > 0 And availability.GetDefault(id, "") <> "CONFIRMED" Then skip = True
+		If skip = False Then ids.Add(id)
+	Next
+	Return ids
+End Sub
+
+Private Sub AddRoundSpot(parent As Panel, left As Int, top As Int, size As Int, kind As String, id As String, displayName As String, emptyLabel As String, selected As Boolean)
+	Dim tag As Map
+	tag.Initialize
+	tag.Put("kind", kind)
+	tag.Put("id", id)
+	Dim avatar As String = ""
+	If displayName <> "" Then avatar = memberAvatars.GetDefault(id, "")
+	Dim slot As Map = modUI.CreateRoundPlayerSlot("pickSpot", tag, size, displayName, avatar, emptyLabel, selected)
+	Dim pnl As Panel = slot.Get("panel")
+	parent.AddView(pnl, left, top, size + 16dip, size + 18dip)
+	If slot.ContainsKey("imageView") = False Then Return
+	Dim iv As ImageView = slot.Get("imageView")
+	If iv.IsInitialized = False Or avatar = "" Then Return
+	' Start after this click handler returns. A photo download cannot start while the goal step is still running.
+	CallSubDelayed3(Me, "LoadSlotAvatar", iv, avatar)
+End Sub
+
+Private Sub LoadSlotAvatar(iv As ImageView, url As String)
+	Dim j As HttpJob
+	j.Initialize("", Me)
+	j.Download(url)
+	Wait For (j) JobDone (job As HttpJob)
+	If job.Success Then
+		Try
+			Dim bmp As Bitmap = job.GetBitmap
+			If bmp <> Null And bmp.IsInitialized Then
+				iv.Bitmap = bmp
+				iv.Gravity = Gravity.FILL
+			End If
+		Catch
+			Log("LiveFeed avatar: " & LastException.Message)
+		End Try
+	End If
+	job.Release
+End Sub
+
+Private Sub pickSpot_Click
+	Dim raw As Object = Sender
+	If Not(raw Is Panel) Then Return
+	Dim pnl As Panel = raw
+	If Not(pnl.Tag Is Map) Then Return
+	Dim tag As Map = pnl.Tag
+	Dim kind As String = tag.GetDefault("kind", "")
+	Dim id As String = tag.GetDefault("id", "")
+	If sheetMode = "pick" Then
+		If kind = "chip" Then
+			FinishPick(id)
+			Return
+		End If
+		If kind = "slot" Then
+			Dim lineup As Map = modAppState.LineupAfterSubs(match)
+			Dim pid As String = "" & lineup.GetDefault(id, "")
+			If pid = "" Or pid = "null" Then
+				ToastMessageShow("Nobody in that spot", False)
+				Return
+			End If
+			If pid = pickExclude Then
+				ToastMessageShow("That's the scorer", False)
+				Return
+			End If
+			FinishPick(pid)
+			Return
+		End If
+		If id = "" Or id = pickExclude Then Return
+		FinishPick(id)
+		Return
+	End If
+	If kind = "slot" Then
+		Dim lineup2 As Map = modAppState.LineupAfterSubs(match)
+		Dim pid2 As String = "" & lineup2.GetDefault(id, "")
+		If pid2 = "" Or pid2 = "null" Then
+			ToastMessageShow("Nobody in that spot", False)
+			Return
+		End If
+		If subOffSlot = id Then
+			subOffSlot = ""
+		Else
+			subOffSlot = id
+		End If
+		DrawSheet
+		Return
+	End If
+	If showPitch And subOffSlot = "" Then
+		ToastMessageShow("Tap a player on the pitch first", False)
+		Return
+	End If
+	If showPitch = False And subOffPlayer = "" Then
+		subOffPlayer = id
+		DrawSheet
+		Return
+	End If
+	Dim playerOut As String = subOffPlayer
+	If showPitch Then playerOut = "" & modAppState.LineupAfterSubs(match).GetDefault(subOffSlot, "")
+	If playerOut = "" Or playerOut = "null" Or playerOut = id Then Return
+	LogSub(playerOut, id, NameForId(playerOut), NameForId(id))
+	CloseSubSheet
+	Refresh
+End Sub
+
+Private Sub btnSubCancel_Click
+	CloseSubSheet
+End Sub
+
+Private Sub NameForId(pid As String) As String
+	If pid = "" Or pid = "null" Then Return ""
+	Dim i As Int
+	For i = 0 To memberIds.Size - 1
+		If memberIds.Get(i) = pid Then Return memberNames.Get(i)
+	Next
+	Return "?"
 End Sub
