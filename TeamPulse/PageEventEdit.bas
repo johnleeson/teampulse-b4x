@@ -255,6 +255,8 @@ Private Sub FriendlyType(t As String) As String
 			Return "CORNER"
 		Case "PENALTY"
 			Return "PENALTY"
+		Case "POSITION"
+			Return "POSITION CHANGE"
 		Case Else
 			Return t
 	End Select
@@ -295,7 +297,7 @@ Private Sub ApplyTypeLayout
 		lblPlayer.Text = "PLAYER"
 		lblContent.Text = "PREVIEW"
 		edtContent.Enabled = False
-	Else If etype = "CORNER" Or etype = "PENALTY" Then
+	Else If etype = "CORNER" Or etype = "PENALTY" Or etype = "POSITION" Then
 		lblContent.Text = "PREVIEW"
 		edtContent.Enabled = False
 	Else If etype = "COMMENT" Then
@@ -663,6 +665,9 @@ Private Sub btnSave_Click
 			details.Put("team", "A")
 		End If
 		ev.Put("content", SetPieceContent(etype, selectedTeamB))
+	Else If etype = "POSITION" Then
+		' Minute and clock are already stored. The switch itself stays as recorded.
+		ev.Put("content", ev.GetDefault("content", ""))
 	Else
 		Dim note As String = edtContent.Text.Trim
 		If note = "" Then

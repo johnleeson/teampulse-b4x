@@ -721,34 +721,18 @@ Public Sub TimelineItemHeight(ev As Map) As Int
 		Dim assistUnknown As String = ("" & details.GetDefault("assistUnknown", False)).ToLowerCase
 		If assistId <> "" Or assistUnknown = "true" Then Return 118dip
 	End If
-	If etype = "COMMENT" Then
+	If etype = "COMMENT" Or etype = "POSITION" Then
 		Dim content As String = ev.GetDefault("content", "")
+		Dim wrapAt As Int = 28
+		If etype = "POSITION" Then wrapAt = 22
 		If content.Length > 48 Then Return 128dip
-		If content.Length > 28 Then Return 112dip
+		If content.Length > wrapAt Then Return 112dip
 	End If
 	Return 100dip
 End Sub
 
-' Timeline row: rail + node + dark card. nameById used for goal scorer/assist lines.
-Public Sub CreateTimelineItem(Width As Int, ev As Map, nameById As Map, isFirst As Boolean, isLast As Boolean) As Panel
-	Dim h As Int = TimelineItemHeight(ev)
-	Dim railW As Int = 28dip
-	Dim row As Panel
-	row.Initialize("")
-	row.Color = 0xFF0F172A
-	Dim lineColor As Int = 0xFF334155
-	If isFirst = False Then
-		Dim lineTop As Panel
-		lineTop.Initialize("")
-		lineTop.Color = lineColor
-		row.AddView(lineTop, railW / 2 - 1dip, 0, 2dip, h / 2 - 5dip)
-	End If
-	If isLast = False Then
-		Dim lineBot As Panel
-		lineBot.Initialize("")
-		lineBot.Color = lineColor
-		row.AddView(lineBot, railW / 2 - 1dip, h / 2 + 5dip, 2dip, h / 2 - 5dip)
-	End If
+' Text shown on a timeline card and on the shared image. Keys: typeLabel, minute, clock, main, line2, line2Color, mainWrap.
+Public Sub TimelineLines(ev As Map, nameById As Map) As Map
 	Dim details As Map
 	Dim dObj As Object = ev.GetDefault("details", Null)
 	If dObj <> Null And dObj Is Map Then
@@ -757,57 +741,15 @@ Public Sub CreateTimelineItem(Width As Int, ev As Map, nameById As Map, isFirst 
 		details.Initialize
 	End If
 	Dim etype As String = ev.GetDefault("type", "EVENT")
-	Dim nodeCol As Int = TypeColor(etype)
-	Dim node As Panel
-	node.Initialize("")
-	node.Background = RoundedBg(nodeCol, 8dip)
-	row.AddView(node, railW / 2 - 7dip, h / 2 - 7dip, 14dip, 14dip)
-	Dim cardW As Int = Width - railW - 4dip
-	Dim card As Panel
-	card.Initialize("")
-	card.Background = RoundedBg(0xFF1E293B, 12dip)
-	row.AddView(card, railW, 4dip, cardW, h - 8dip)
-	Dim accent As Panel
-	accent.Initialize("")
-	accent.Color = nodeCol
-	card.AddView(accent, 0, 0, 4dip, h - 8dip)
 	Dim minute As Int = details.GetDefault("minute", -1)
 	Dim clock As String = details.GetDefault("clockTime", "")
 	If clock = "" Then clock = FormatClock(ev.GetDefault("timestamp", DateTime.Now))
 	Dim timeLabel As String = "--'"
 	If minute >= 0 Then timeLabel = minute & "'"
-	Dim lblMin As Label
-	lblMin.Initialize("")
-	lblMin.Text = timeLabel
-	lblMin.TextSize = 15
-	lblMin.TextColor = modConfig.COLOR_ACCENT
-	lblMin.Typeface = Typeface.DEFAULT_BOLD
-	lblMin.Gravity = Gravity.CENTER
-	card.AddView(lblMin, 10dip, 10dip, 44dip, 24dip)
-	Dim lblClock As Label
-	lblClock.Initialize("")
-	lblClock.Text = clock
-	lblClock.TextSize = 11
-	lblClock.TextColor = 0xFF94A3B8
-	lblClock.Gravity = Gravity.CENTER
-	card.AddView(lblClock, 10dip, 36dip, 44dip, 16dip)
-	Dim textLeft As Int = 58dip
-	' Leave room for edit/delete overlay buttons on the right of the row
-	Dim textW As Int = cardW - textLeft - 88dip
-	If textW < 80dip Then textW = 80dip
-	Dim lblType As Label
-	lblType.Initialize("")
-	lblType.Text = FriendlyType(etype)
-	lblType.TextSize = 10
-	lblType.TextColor = nodeCol
-	lblType.Typeface = Typeface.DEFAULT_BOLD
-	card.AddView(lblType, textLeft, 8dip, textW, 16dip)
-	
 	Dim mainText As String = ev.GetDefault("content", "")
 	Dim line2Text As String = ""
 	Dim line2Color As Int = 0xFF94A3B8
 	Dim mainWrap As Boolean = False
-	
 	If etype = "GOAL" Then
 		Dim team As String = details.GetDefault("team", "A")
 		Dim ownGoal As Boolean = modLocal.IsOwnGoal(details)
@@ -860,11 +802,90 @@ Public Sub CreateTimelineItem(Width As Int, ev As Map, nameById As Map, isFirst 
 		Else
 			mainText = "Our team"
 		End If
-	Else If etype = "COMMENT" Then
+	Else If etype = "COMMENT" Or etype = "POSITION" Then
 		mainWrap = True
 	Else
 		mainWrap = (mainText.Length > 22)
 	End If
+	Dim out As Map
+	out.Initialize
+	out.Put("typeLabel", FriendlyType(etype))
+	out.Put("minute", timeLabel)
+	out.Put("clock", clock)
+	out.Put("main", mainText)
+	out.Put("line2", line2Text)
+	out.Put("line2Color", line2Color)
+	out.Put("mainWrap", mainWrap)
+	Return out
+End Sub
+
+' Timeline row: rail + node + dark card. nameById used for goal scorer/assist lines.
+Public Sub CreateTimelineItem(Width As Int, ev As Map, nameById As Map, isFirst As Boolean, isLast As Boolean) As Panel
+	Dim h As Int = TimelineItemHeight(ev)
+	Dim railW As Int = 28dip
+	Dim row As Panel
+	row.Initialize("")
+	row.Color = 0xFF0F172A
+	Dim lineColor As Int = 0xFF334155
+	If isFirst = False Then
+		Dim lineTop As Panel
+		lineTop.Initialize("")
+		lineTop.Color = lineColor
+		row.AddView(lineTop, railW / 2 - 1dip, 0, 2dip, h / 2 - 5dip)
+	End If
+	If isLast = False Then
+		Dim lineBot As Panel
+		lineBot.Initialize("")
+		lineBot.Color = lineColor
+		row.AddView(lineBot, railW / 2 - 1dip, h / 2 + 5dip, 2dip, h / 2 - 5dip)
+	End If
+	Dim etype As String = ev.GetDefault("type", "EVENT")
+	Dim lines As Map = TimelineLines(ev, nameById)
+	Dim nodeCol As Int = TypeColor(etype)
+	Dim node As Panel
+	node.Initialize("")
+	node.Background = RoundedBg(nodeCol, 8dip)
+	row.AddView(node, railW / 2 - 7dip, h / 2 - 7dip, 14dip, 14dip)
+	Dim cardW As Int = Width - railW - 4dip
+	Dim card As Panel
+	card.Initialize("")
+	card.Background = RoundedBg(0xFF1E293B, 12dip)
+	row.AddView(card, railW, 4dip, cardW, h - 8dip)
+	Dim accent As Panel
+	accent.Initialize("")
+	accent.Color = nodeCol
+	card.AddView(accent, 0, 0, 4dip, h - 8dip)
+	Dim lblMin As Label
+	lblMin.Initialize("")
+	lblMin.Text = lines.Get("minute")
+	lblMin.TextSize = 15
+	lblMin.TextColor = modConfig.COLOR_ACCENT
+	lblMin.Typeface = Typeface.DEFAULT_BOLD
+	lblMin.Gravity = Gravity.CENTER
+	card.AddView(lblMin, 10dip, 10dip, 44dip, 24dip)
+	Dim lblClock As Label
+	lblClock.Initialize("")
+	lblClock.Text = lines.Get("clock")
+	lblClock.TextSize = 11
+	lblClock.TextColor = 0xFF94A3B8
+	lblClock.Gravity = Gravity.CENTER
+	card.AddView(lblClock, 10dip, 36dip, 44dip, 16dip)
+	Dim textLeft As Int = 58dip
+	' Leave room for edit/delete overlay buttons on the right of the row
+	Dim textW As Int = cardW - textLeft - 88dip
+	If textW < 80dip Then textW = 80dip
+	Dim lblType As Label
+	lblType.Initialize("")
+	lblType.Text = lines.Get("typeLabel")
+	lblType.TextSize = 10
+	lblType.TextColor = nodeCol
+	lblType.Typeface = Typeface.DEFAULT_BOLD
+	card.AddView(lblType, textLeft, 8dip, textW, 16dip)
+	
+	Dim mainText As String = lines.Get("main")
+	Dim line2Text As String = lines.Get("line2")
+	Dim line2Color As Int = lines.Get("line2Color")
+	Dim mainWrap As Boolean = lines.Get("mainWrap")
 	
 	Dim mainH As Int = 22dip
 	If etype = "SUB" Then
@@ -966,6 +987,8 @@ Private Sub FriendlyType(etype As String) As String
 			Return "FULL TIME"
 		Case "SUB"
 			Return "SUBSTITUTION"
+		Case "POSITION"
+			Return "POSITION CHANGE"
 		Case "COMMENT"
 			Return "COMMENTARY"
 		Case "CORNER"
@@ -1001,6 +1024,8 @@ Private Sub TypeColor(etype As String) As Int
 			Return modConfig.COLOR_DANGER
 		Case "SUB"
 			Return modConfig.COLOR_ACCENT
+		Case "POSITION"
+			Return 0xFF2DD4BF
 		Case "HALF_TIME", "SECOND_HALF"
 			Return 0xFFFB923C
 		Case "START", "END"
@@ -1319,8 +1344,14 @@ Public Sub CreateRoundPlayerSlot(eventName As String, tag As Object, size As Int
 	End If
 	Dim hit As Panel
 	hit.Initialize(eventName)
-	hit.Color = Colors.Transparent
+	' A fully clear panel is skipped by hit testing.
+	hit.Color = Colors.ARGB(1, 0, 0, 0)
 	hit.Tag = tag
+	Dim hjo As JavaObject = hit
+	hjo.RunMethod("setLongClickable", Array(True))
+	Dim hook As JavaObject
+	hook.InitializeStatic(Application.PackageName & ".modui")
+	hook.RunMethod("holdForLongPress", Array(hjo))
 	wrap.AddView(hit, -4dip, 0, size + 8dip, size + 16dip)
 	Dim out As Map
 	out.Initialize

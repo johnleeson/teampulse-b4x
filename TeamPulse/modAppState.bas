@@ -716,8 +716,8 @@ Private Sub StarterIds(match As Map, subs As List) As List
 	Return starters
 End Sub
 
-' Current XI: kick-off slots in this formation, then every local SUB in order.
-' Includes subs that have not reached Supabase yet.
+' Current XI: kick-off slots in this formation, then each local SUB and POSITION in time order.
+' Includes events that have not reached Supabase yet.
 Public Sub LineupAfterSubs(match As Map) As Map
 	Dim filtered As Map
 	filtered.Initialize
@@ -729,26 +729,37 @@ Public Sub LineupAfterSubs(match As Map) As Map
 		If FormationSlotAllowed(match, slotId) = False Then Continue
 		filtered.Put(slotId, "" & slots.GetValueAt(i))
 	Next
-	Dim subs As List
-	subs.Initialize
+	Dim changes As List
+	changes.Initialize
 	Dim events As List = EventsForMatch(match.GetDefault("id", ""))
 	For i = 0 To events.Size - 1
 		Dim e As Map = events.Get(i)
-		If e.GetDefault("type", "") <> "SUB" Then Continue
+		Dim etype As String = e.GetDefault("type", "")
+		If etype <> "SUB" And etype <> "POSITION" Then Continue
 		Dim d As Map = EventDetailsMap(e)
 		If d.GetDefault("team", "A") = "B" Then Continue
 		Dim row As Map
 		row.Initialize
 		row.Put("atMs", ToLong(e.GetDefault("timestamp", 0)))
-		row.Put("playerOut", d.GetDefault("playerOut", ""))
-		row.Put("playerIn", d.GetDefault("playerIn", ""))
-		subs.Add(row)
+		row.Put("kind", etype)
+		If etype = "SUB" Then
+			row.Put("playerOut", d.GetDefault("playerOut", ""))
+			row.Put("playerIn", d.GetDefault("playerIn", ""))
+		Else
+			row.Put("slotA", "" & d.GetDefault("slotA", ""))
+			row.Put("slotB", "" & d.GetDefault("slotB", ""))
+		End If
+		changes.Add(row)
 	Next
-	SortByAtMs(subs)
-	For i = 0 To subs.Size - 1
-		Dim subEv As Map = subs.Get(i)
-		Dim pout As String = subEv.GetDefault("playerOut", "")
-		Dim pin As String = subEv.GetDefault("playerIn", "")
+	SortByAtMs(changes)
+	For i = 0 To changes.Size - 1
+		Dim change As Map = changes.Get(i)
+		If change.GetDefault("kind", "") = "POSITION" Then
+			modSubPlanner.ExchangeSlots(filtered, change.GetDefault("slotA", ""), change.GetDefault("slotB", ""))
+			Continue
+		End If
+		Dim pout As String = change.GetDefault("playerOut", "")
+		Dim pin As String = change.GetDefault("playerIn", "")
 		If pout = "" Or pin = "" Then Continue
 		Dim foundSlot As String = ""
 		Dim s As Int

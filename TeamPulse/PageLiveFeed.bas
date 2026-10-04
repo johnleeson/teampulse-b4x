@@ -36,6 +36,9 @@ Sub Class_Globals
 	Private pickOpen As Boolean
 	Private showPitch As Boolean
 	Private sheetTitle As String
+	Private holdSlot As String
+	Private actionsLocked As Boolean
+	Private sharingTimeline As Boolean
 End Sub
 
 Public Sub Initialize
@@ -76,7 +79,7 @@ Private Sub pollTimer_Tick
 End Sub
 
 Private Sub BuildUI
-	Dim chrome As Map = modUI.AddPageChrome(Root, "Live", "btnBack", "", "", True)
+	Dim chrome As Map = modUI.AddPageChrome(Root, "Live", "btnBack", "btnShare", "↗", True)
 	Dim top As Int = chrome.Get("ContentTop")
 	lblStatus.Initialize("")
 	lblStatus.TextColor = 0xFF94A3B8
@@ -304,6 +307,7 @@ Private Sub AddEvent(etype As String, content As String, details As Map) As Stri
 End Sub
 
 Private Sub btnGoal_Click
+	If actionsLocked Then Return
 	Dim teamChips As List = ChipList(Array As String("our", "Our team", "opp", "Opponent"))
 	Wait For (ShowPick("Who scored?", teamChips, False, "")) Complete (team As String)
 	If team = "" Then Return
@@ -366,7 +370,7 @@ Private Sub btnGoal_Click
 End Sub
 
 Private Sub btnSub_Click
-	If subSheetOpen Then Return
+	If actionsLocked Or subSheetOpen Then Return
 	match = modAppState.FindMatch(modAppState.SelectedMatchId)
 	If memberIds.Size < 2 Then
 		ToastMessageShow("Need at least 2 players", False)
@@ -377,6 +381,7 @@ Private Sub btnSub_Click
 	sheetIncludePlayers = True
 	subOffSlot = ""
 	subOffPlayer = ""
+	holdSlot = ""
 	OpenSubSheet
 End Sub
 
@@ -402,6 +407,7 @@ Private Sub LogSub(playerOut As String, playerIn As String, outName As String, i
 End Sub
 
 Private Sub btnYC_Click
+	If actionsLocked Then Return
 	Wait For (ShowPick("Yellow card", EmptyChipList, True, "")) Complete (pid As String)
 	If pid = "" Then Return
 	Dim details As Map
@@ -415,6 +421,7 @@ Private Sub btnYC_Click
 End Sub
 
 Private Sub btnRC_Click
+	If actionsLocked Then Return
 	Wait For (ShowPick("Red card", EmptyChipList, True, "")) Complete (pid As String)
 	If pid = "" Then Return
 	Dim details As Map
@@ -444,6 +451,7 @@ Private Sub btnPenThem_Click
 End Sub
 
 Private Sub LogSetPiece(etype As String, team As String, content As String)
+	If actionsLocked Then Return
 	Dim details As Map
 	details.Initialize
 	details.Put("team", team)
@@ -452,6 +460,7 @@ Private Sub LogSetPiece(etype As String, team As String, content As String)
 End Sub
 
 Private Sub btnHT_Click
+	If actionsLocked Then Return
 	Dim details As Map
 	details.Initialize
 	StampTimeDetails(details)
@@ -459,6 +468,7 @@ Private Sub btnHT_Click
 End Sub
 
 Private Sub btn2H_Click
+	If actionsLocked Then Return
 	Dim details As Map
 	details.Initialize
 	StampTimeDetails(details)
@@ -466,6 +476,7 @@ Private Sub btn2H_Click
 End Sub
 
 Private Sub btnEnd_Click
+	If actionsLocked Then Return
 	modLocal.ApplyLiveScore(match)
 	match.Put("status", "COMPLETED")
 	Dim details As Map
@@ -482,6 +493,7 @@ Private Sub btnEnd_Click
 End Sub
 
 Private Sub btnComment_Click
+	If actionsLocked Then Return
 	' Custom note dialog — avoids B4XInputTemplate "Explanation" label.
 	StyleDarkDialog
 	Dim pnl As B4XView = xui.CreatePanel("")
@@ -543,6 +555,7 @@ Private Sub ApplyProjectedMinutesToStats
 End Sub
 
 Private Sub btnReset_Click
+	If actionsLocked Then Return
 	If match.GetDefault("status", "") <> "LIVE" Then
 		ToastMessageShow("Only live matches can be reset", False)
 		Return
@@ -687,6 +700,7 @@ Private Sub ShowPick(title As String, chips As List, includePlayers As Boolean, 
 	pickExclude = excludeId
 	subOffSlot = ""
 	subOffPlayer = ""
+	holdSlot = ""
 	OpenSubSheet
 	Wait For PlayerPicked (choice As String)
 	Return choice
@@ -714,6 +728,7 @@ Private Sub EmptyChipList As List
 End Sub
 
 Private Sub OpenSubSheet
+	actionsLocked = True
 	If subSheet.IsInitialized = False Then BuildSubSheet
 	subSheet.Elevation = 24dip
 	subSheet.Visible = True
@@ -742,12 +757,19 @@ Private Sub HideSubSheet
 	subSheetOpen = False
 	subOffSlot = ""
 	subOffPlayer = ""
+	holdSlot = ""
 	sheetMode = ""
 	If subSheet.IsInitialized Then subSheet.Visible = False
+	CallSubDelayed(Me, "UnlockActions")
+End Sub
+
+Private Sub UnlockActions
+	If subSheetOpen Then Return
+	actionsLocked = False
 End Sub
 
 Private Sub BuildSubSheet
-	subSheet.Initialize("")
+	subSheet.Initialize("subSheetBlock")
 	subSheet.Color = 0xFF0F172A
 	subSheet.Elevation = 24dip
 	Root.AddView(subSheet, 0, 0, Root.Width, Root.Height)
@@ -760,23 +782,27 @@ Private Sub BuildSubSheet
 	subSheet.AddView(btnCancel, 12dip, 8dip, Root.Width - 24dip, 44dip)
 	subHint.Initialize("")
 	subHint.TextColor = Colors.White
-	subHint.TextSize = 16
+	subHint.TextSize = 15
 	subHint.Typeface = Typeface.DEFAULT_BOLD
 	subHint.Gravity = Gravity.CENTER
-	subSheet.AddView(subHint, 12dip, 56dip, Root.Width - 24dip, 28dip)
-	chipHost.Initialize("")
+	subHint.SingleLine = False
+	subSheet.AddView(subHint, 12dip, 56dip, Root.Width - 24dip, 44dip)
+	chipHost.Initialize("subSheetBlock")
 	chipHost.Color = 0xFF0F172A
-	subSheet.AddView(chipHost, 0, 88dip, Root.Width, 0)
-	subPitch.Initialize("")
+	subSheet.AddView(chipHost, 0, 108dip, Root.Width, 0)
+	subPitch.Initialize("subSheetBlock")
 	subPitch.Color = 0xFF166534
-	subSheet.AddView(subPitch, 8dip, 88dip, Root.Width - 16dip, 0)
+	subSheet.AddView(subPitch, 8dip, 108dip, Root.Width - 16dip, 0)
 	benchScroll.Initialize(200dip)
 	benchScroll.Color = 0xFF0F172A
-	subSheet.AddView(benchScroll, 0, 88dip, Root.Width, 80dip)
+	subSheet.AddView(benchScroll, 0, 108dip, Root.Width, 80dip)
 	benchScroll.Panel.Color = 0xFF0F172A
-	benchHost.Initialize("")
+	benchHost.Initialize("subSheetBlock")
 	benchHost.Color = 0xFF0F172A
 	benchScroll.Panel.AddView(benchHost, 0, 0, Root.Width, 200dip)
+End Sub
+
+Private Sub subSheetBlock_Click
 End Sub
 
 Private Sub DrawSheet
@@ -789,8 +815,10 @@ Private Sub DrawSheet
 	End If
 	If sheetMode = "pick" Then
 		subHint.Text = sheetTitle
+	Else If showPitch And holdSlot <> "" Then
+		subHint.Text = "Hold another spot to switch"
 	Else If showPitch And subOffSlot = "" Then
-		subHint.Text = "Tap the player coming off"
+		subHint.Text = "Tap a player to sub. Hold two spots to switch."
 	Else If showPitch Then
 		subHint.Text = "Tap who is coming on"
 	Else If subOffPlayer = "" Then
@@ -798,7 +826,7 @@ Private Sub DrawSheet
 	Else
 		subHint.Text = "Tap who is coming on"
 	End If
-	Dim y As Int = 92dip
+	Dim y As Int = 108dip
 	Dim chipH As Int = 0
 	If sheetChips.IsInitialized And sheetChips.Size > 0 Then chipH = 88dip
 	chipHost.SetLayout(0, y, Root.Width, chipH)
@@ -864,7 +892,8 @@ Private Sub DrawPitch(lineup As Map)
 		Dim pid As String = "" & lineup.GetDefault(posId, "")
 		Dim displayName As String = ""
 		If pid <> "" And pid <> "null" Then displayName = NameForId(pid)
-		AddRoundSpot(subPitch, origin.Get("left"), origin.Get("top"), slotSize, "slot", posId, displayName, p.GetDefault("label", ""), posId = subOffSlot)
+		Dim held As Boolean = posId = subOffSlot Or posId = holdSlot
+		AddRoundSpot(subPitch, origin.Get("left"), origin.Get("top"), slotSize, "slot", posId, displayName, p.GetDefault("label", ""), held)
 	Next
 End Sub
 
@@ -987,6 +1016,83 @@ Private Sub LoadSlotAvatar(iv As ImageView, url As String)
 	job.Release
 End Sub
 
+Private Sub pickSpot_LongClick As Boolean
+	If sheetMode <> "sub" Or showPitch = False Then Return False
+	Dim raw As Object = Sender
+	If Not(raw Is Panel) Then Return True
+	Dim pnl As Panel = raw
+	If Not(pnl.Tag Is Map) Then Return True
+	Dim tag As Map = pnl.Tag
+	If tag.GetDefault("kind", "") <> "slot" Then Return True
+	Dim slotId As String = tag.GetDefault("id", "")
+	If slotId = "" Then Return True
+	If holdSlot = "" Then
+		holdSlot = slotId
+		ToastMessageShow("Hold another spot to switch", False)
+		CallSubDelayed(Me, "DrawSheet")
+		Return True
+	End If
+	If slotId = holdSlot Then
+		holdSlot = ""
+		ToastMessageShow("Switch cancelled", False)
+		CallSubDelayed(Me, "DrawSheet")
+		Return True
+	End If
+	If LogPositionSwitch(holdSlot, slotId) = False Then
+		ToastMessageShow("Nothing to switch", False)
+		Return True
+	End If
+	holdSlot = ""
+	subOffSlot = ""
+	subOffPlayer = ""
+	ToastMessageShow("Positions switched", False)
+	CallSubDelayed(Me, "DrawSheet")
+	Return True
+End Sub
+
+Private Sub LogPositionSwitch(slotA As String, slotB As String) As Boolean
+	Dim lineup As Map = modAppState.LineupAfterSubs(match)
+	Dim idA As String = CleanPlayerId(lineup.GetDefault(slotA, ""))
+	Dim idB As String = CleanPlayerId(lineup.GetDefault(slotB, ""))
+	If idA = "" And idB = "" Then Return False
+	Dim details As Map
+	details.Initialize
+	details.Put("team", "A")
+	details.Put("slotA", slotA)
+	details.Put("slotB", slotB)
+	details.Put("playerA", idA)
+	details.Put("playerB", idB)
+	StampTimeDetails(details)
+	AddEvent("POSITION", SpotCaption(lineup, slotA) & " ↔ " & SpotCaption(lineup, slotB), details)
+	Return True
+End Sub
+
+Private Sub SpotCaption(lineup As Map, slotId As String) As String
+	Dim label As String = SlotLabel(slotId)
+	Dim pid As String = CleanPlayerId(lineup.GetDefault(slotId, ""))
+	If pid = "" Then Return label
+	Return NameForId(pid) & " (" & label & ")"
+End Sub
+
+Private Sub SlotLabel(slotId As String) As String
+	Dim formName As String = ""
+	If match.IsInitialized Then formName = match.GetDefault("formation", "")
+	If formName = "" And club.IsInitialized Then formName = club.GetDefault("preferredFormation", "")
+	Dim positions As List = modFormations.GetPositions(formName)
+	Dim i As Int
+	For i = 0 To positions.Size - 1
+		Dim p As Map = positions.Get(i)
+		If ("" & p.GetDefault("id", "")) = slotId Then Return "" & p.GetDefault("label", slotId)
+	Next
+	Return slotId
+End Sub
+
+Private Sub CleanPlayerId(raw As Object) As String
+	Dim pid As String = "" & raw
+	If pid = "null" Then Return ""
+	Return pid
+End Sub
+
 Private Sub pickSpot_Click
 	Dim raw As Object = Sender
 	If Not(raw Is Panel) Then Return
@@ -1061,4 +1167,168 @@ Private Sub NameForId(pid As String) As String
 		If memberIds.Get(i) = pid Then Return memberNames.Get(i)
 	Next
 	Return "?"
+End Sub
+
+Private Sub btnShare_Click
+	If sharingTimeline Then Return
+	If match.IsInitialized = False Or match.ContainsKey("id") = False Then
+		ToastMessageShow("Open a match first", False)
+		Return
+	End If
+	sharingTimeline = True
+	Dim err As String = ""
+	Try
+		err = WriteAndShareTimeline
+	Catch
+		Log("ShareTimeline: " & LastException)
+		err = "Could not create the timeline image."
+	End Try
+	sharingTimeline = False
+	If err <> "" Then ToastMessageShow(err, True)
+End Sub
+
+Private Sub WriteAndShareTimeline As String
+	Dim newest As List = modAppState.EventsNewestFirst(match.Get("id"))
+	Dim oldest As List
+	oldest.Initialize
+	Dim i As Int
+	For i = newest.Size - 1 To 0 Step -1
+		oldest.Add(newest.Get(i))
+	Next
+	Dim names As Map = NameByIdMap
+	Dim drawn As List
+	drawn.Initialize
+	AddShareLine(drawn, "title", match.GetDefault("title", "Match"))
+	AddShareLine(drawn, "score", match.GetDefault("scoreA", 0) & "  -  " & match.GetDefault("scoreB", 0))
+	AddShareLine(drawn, "gap", "")
+	If oldest.Size = 0 Then
+		AddShareLine(drawn, "body", "No events yet")
+	Else
+		For i = 0 To oldest.Size - 1
+			Dim ev As Map = oldest.Get(i)
+			Dim lines As Map = modUI.TimelineLines(ev, names)
+			AddShareLine(drawn, "meta", lines.Get("minute") & "    " & lines.Get("clock") & "    " & lines.Get("typeLabel"))
+			Dim mainText As String = lines.Get("main")
+			Dim wrapped As List = WrapShareText(mainText, 42)
+			Dim w As Int
+			For w = 0 To wrapped.Size - 1
+				AddShareLine(drawn, "body", wrapped.Get(w))
+			Next
+			Dim line2 As String = lines.Get("line2")
+			If line2 <> "" Then
+				Dim wrapped2 As List = WrapShareText(line2, 42)
+				For w = 0 To wrapped2.Size - 1
+					AddShareLine(drawn, "sub", wrapped2.Get(w))
+				Next
+			End If
+			AddShareLine(drawn, "gap", "")
+		Next
+	End If
+	Dim width As Int = 1080
+	Dim pad As Int = 64
+	Dim height As Int = pad
+	For i = 0 To drawn.Size - 1
+		Dim measure As Map = drawn.Get(i)
+		height = height + ShareLineStep(measure.Get("kind"))
+	Next
+	height = height + pad
+	If height < 480 Then height = 480
+	If height > 8192 Then height = 8192
+	Dim bmp As Bitmap
+	bmp.InitializeMutable(width, height)
+	Dim cvs As Canvas
+	cvs.Initialize2(bmp)
+	Dim bg As Rect
+	bg.Initialize(0, 0, width, height)
+	cvs.DrawRect(bg, 0xFF0F172A, True, 0)
+	Dim y As Int = pad
+	For i = 0 To drawn.Size - 1
+		Dim row As Map = drawn.Get(i)
+		Dim kind As String = row.Get("kind")
+		Dim lineStep As Int = ShareLineStep(kind)
+		If y + lineStep > height - 24 Then Exit
+		If kind = "gap" Then
+			y = y + lineStep
+			Continue
+		End If
+		Dim text As String = row.Get("text")
+		Dim size As Float = 32
+		Dim col As Int = 0xFFE2E8F0
+		Dim face As Typeface = Typeface.DEFAULT
+		If kind = "title" Then
+			size = 48
+			col = Colors.White
+			face = Typeface.DEFAULT_BOLD
+		Else If kind = "score" Then
+			size = 68
+			col = Colors.White
+			face = Typeface.DEFAULT_BOLD
+		Else If kind = "meta" Then
+			size = 28
+			col = 0xFF38BDF8
+			face = Typeface.DEFAULT_BOLD
+		Else If kind = "sub" Then
+			col = 0xFF94A3B8
+		End If
+		cvs.DrawText(text, pad, y + lineStep - 14, face, size, col, "LEFT")
+		y = y + lineStep
+	Next
+	File.MakeDir(File.DirInternal, "shared")
+	Dim dir As String = File.Combine(File.DirInternal, "shared")
+	Dim existing As List = File.ListFiles(dir)
+	If existing.IsInitialized Then
+		For i = 0 To existing.Size - 1
+			Dim name As String = existing.Get(i)
+			If name.StartsWith("timeline-") And name.EndsWith(".jpg") Then File.Delete(dir, name)
+		Next
+	End If
+	Dim fileName As String = "timeline-" & ShareStamp & ".jpg"
+	Dim out As OutputStream = File.OpenOutput(dir, fileName, False)
+	bmp.WriteToStream(out, 90, "JPEG")
+	out.Close
+	Return modExport.ShareDocument(dir, fileName, "image/jpeg", "Share timeline")
+End Sub
+
+Private Sub ShareLineStep(kind As String) As Int
+	If kind = "gap" Then Return 28
+	If kind = "title" Then Return 72
+	If kind = "score" Then Return 96
+	Return 48
+End Sub
+
+Private Sub AddShareLine(lines As List, kind As String, text As String)
+	Dim row As Map
+	row.Initialize
+	row.Put("kind", kind)
+	row.Put("text", text)
+	lines.Add(row)
+End Sub
+
+Private Sub WrapShareText(text As String, maxChars As Int) As List
+	Dim lines As List
+	lines.Initialize
+	Dim rest As String = text
+	If rest = "" Then
+		lines.Add("")
+		Return lines
+	End If
+	Do While rest.Length > maxChars
+		Dim cut As Int = rest.LastIndexOf2(" ", maxChars)
+		If cut < 8 Then cut = maxChars
+		lines.Add(rest.SubString2(0, cut).Trim)
+		rest = rest.SubString(cut).Trim
+	Loop
+	If rest <> "" Then lines.Add(rest)
+	Return lines
+End Sub
+
+Private Sub ShareStamp As String
+	Dim oldDate As String = DateTime.DateFormat
+	Dim oldTime As String = DateTime.TimeFormat
+	DateTime.DateFormat = "yyyyMMdd"
+	DateTime.TimeFormat = "HHmmss"
+	Dim s As String = DateTime.Date(DateTime.Now) & "-" & DateTime.Time(DateTime.Now)
+	DateTime.DateFormat = oldDate
+	DateTime.TimeFormat = oldTime
+	Return s
 End Sub
