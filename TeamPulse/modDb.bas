@@ -235,6 +235,22 @@ Private Sub ParseTimestamp(v As Object) As Long
 	End Try
 End Sub
 
+' JSON reload stores numbers as Double. A direct Long cast throws and aborts the upload.
+Private Sub MillisOf(v As Object) As Long
+	If v = Null Then Return DateTime.Now
+	Try
+		Dim n As Long = v
+		Return n
+	Catch
+		Try
+			Dim d As Double = v
+			Return d
+		Catch
+			Return ParseTimestamp(v)
+		End Try
+	End Try
+End Sub
+
 Private Sub IsoTimestamp(ms As Long) As String
 	Try
 		Dim inst As JavaObject
@@ -496,7 +512,7 @@ Public Sub BuildEventPayload(ev As Map) As Map
 	payload.Put("type", ev.GetDefault("type", "COMMENT"))
 	payload.Put("content", ev.GetDefault("content", ""))
 	payload.Put("details", ev.GetDefault("details", EmptyMap))
-	payload.Put("timestamp", IsoTimestamp(ev.GetDefault("timestamp", DateTime.Now)))
+	payload.Put("timestamp", IsoTimestamp(MillisOf(ev.GetDefault("timestamp", DateTime.Now))))
 	Return payload
 End Sub
 

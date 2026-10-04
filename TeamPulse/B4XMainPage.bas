@@ -196,16 +196,17 @@ Private Sub RunSync
 			Exit
 		End If
 		If tokenState = "offline" Then Exit
-		Dim evJob As Map = modLocal.NextEventSend
-		If evJob.ContainsKey("id") Then
-			Wait For (SendEventJob(evJob)) Complete (ok As Boolean)
-			If ok = False Then Exit
-			Continue
-		End If
+		' Match row first. A new offline match has no server row yet, so its events would be rejected.
 		Dim matchJob As Map = modLocal.NextMatchSend
 		If matchJob.ContainsKey("id") Then
 			Wait For (SendMatchJob(matchJob)) Complete (okMatch As Boolean)
 			If okMatch = False Then Exit
+			Continue
+		End If
+		Dim evJob As Map = modLocal.NextEventSend
+		If evJob.ContainsKey("id") Then
+			Wait For (SendEventJob(evJob)) Complete (ok As Boolean)
+			If ok = False Then Exit
 			Continue
 		End If
 		If wantPull Then
@@ -235,19 +236,33 @@ Private Sub SendEventJob(job As Map) As ResumableSub
 	End If
 	Wait For (WriteEvent(eventId, op)) Complete (res As Map)
 	Dim ok As Boolean = res.GetDefault("ok", False)
-	If ok Then modLocal.NoteEventSend(eventId, rev, op, True)
+	If ok Then
+		modLocal.NoteEventSend(eventId, rev, op, True)
+	Else
+		Log("SendEventJob " & eventId & ": " & res.GetDefault("error", http.LastError))
+	End If
 	Return ok
 End Sub
 
 Private Sub WriteEvent(eventId As String, op As String) As ResumableSub
-	If op = "delete" Then
-		Dim q As String = modDb.TBL_EVENTS & "?id=eq." & modSupabase.UrlEncode(eventId)
-		Wait For (http.RestDelete(q)) Complete (delRes As Map)
-		Return delRes
-	End If
-	Dim ev As Map = modAppState.FindEvent(eventId)
-	Wait For (http.RestPost(modDb.TBL_EVENTS & "?on_conflict=id", modDb.BuildEventPayload(ev), "resolution=merge-duplicates,return=minimal")) Complete (postRes As Map)
-	Return postRes
+	Dim fail As Map
+	fail.Initialize
+	fail.Put("ok", False)
+	Try
+		If op = "delete" Then
+			Dim q As String = modDb.TBL_EVENTS & "?id=eq." & modSupabase.UrlEncode(eventId)
+			Wait For (http.RestDelete(q)) Complete (delRes As Map)
+			Return delRes
+		End If
+		Dim ev As Map = modAppState.FindEvent(eventId)
+		Dim payload As Map = modDb.BuildEventPayload(ev)
+		Wait For (http.RestPost(modDb.TBL_EVENTS & "?on_conflict=id", payload, "resolution=merge-duplicates,return=minimal")) Complete (postRes As Map)
+		Return postRes
+	Catch
+		Log("WriteEvent: " & LastException)
+		fail.Put("error", LastException.Message)
+		Return fail
+	End Try
 End Sub
 
 Private Sub SendMatchJob(job As Map) As ResumableSub
@@ -258,11 +273,21 @@ Private Sub SendMatchJob(job As Map) As ResumableSub
 		modLocal.NoteMatchSend(matchId, rev, True)
 		Return True
 	End If
-	modLocal.ApplyLiveScore(match)
-	Wait For (http.RestPost(modDb.TBL_MATCHES & "?on_conflict=id", modDb.BuildMatchPayload(match), "resolution=merge-duplicates,return=minimal")) Complete (res As Map)
-	Dim ok As Boolean = res.GetDefault("ok", False)
-	If ok Then modLocal.NoteMatchSend(matchId, rev, True)
-	Return ok
+	Try
+		modLocal.ApplyLiveScore(match)
+		Dim payload As Map = modDb.BuildMatchPayload(match)
+		Wait For (http.RestPost(modDb.TBL_MATCHES & "?on_conflict=id", payload, "resolution=merge-duplicates,return=minimal")) Complete (res As Map)
+		Dim ok As Boolean = res.GetDefault("ok", False)
+		If ok Then
+			modLocal.NoteMatchSend(matchId, rev, True)
+		Else
+			Log("SendMatchJob " & matchId & ": " & res.GetDefault("error", http.LastError))
+		End If
+		Return ok
+	Catch
+		Log("SendMatchJob: " & LastException)
+		Return False
+	End Try
 End Sub
 
 Private Sub PullServer As ResumableSub

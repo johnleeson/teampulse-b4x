@@ -251,6 +251,10 @@ Private Sub FriendlyType(t As String) As String
 			Return "KICK-OFF"
 		Case "END"
 			Return "FULL TIME"
+		Case "CORNER"
+			Return "CORNER"
+		Case "PENALTY"
+			Return "PENALTY"
 		Case Else
 			Return t
 	End Select
@@ -258,7 +262,7 @@ End Sub
 
 Private Sub ApplyTypeLayout
 	Dim etype As String = ev.GetDefault("type", "")
-	Dim showTeam As Boolean = (etype = "GOAL")
+	Dim showTeam As Boolean = (etype = "GOAL" Or etype = "CORNER" Or etype = "PENALTY")
 	Dim showPlayer As Boolean = (etype = "GOAL" Or etype = "SUB" Or etype = "YELLOW_CARD" Or etype = "RED_CARD")
 	Dim showAssist As Boolean = (etype = "GOAL" Or etype = "SUB")
 	Dim editNote As Boolean = (etype = "COMMENT" Or etype = "HALF_TIME" Or etype = "SECOND_HALF" Or etype = "START" Or etype = "END")
@@ -289,6 +293,9 @@ Private Sub ApplyTypeLayout
 		edtContent.Enabled = False
 	Else If etype = "YELLOW_CARD" Or etype = "RED_CARD" Then
 		lblPlayer.Text = "PLAYER"
+		lblContent.Text = "PREVIEW"
+		edtContent.Enabled = False
+	Else If etype = "CORNER" Or etype = "PENALTY" Then
 		lblContent.Text = "PREVIEW"
 		edtContent.Enabled = False
 	Else If etype = "COMMENT" Then
@@ -393,6 +400,8 @@ Private Sub AutoFillContent
 		Dim pn As String = NameOf(selectedPlayerId)
 		If pn = "" Then pn = "?"
 		edtContent.Text = pn
+	Else If etype = "CORNER" Or etype = "PENALTY" Then
+		edtContent.Text = SetPieceContent(etype, selectedTeamB)
 	End If
 	syncing = False
 End Sub
@@ -647,6 +656,13 @@ Private Sub btnSave_Click
 		details.Put("team", "A")
 		details.Put("player", selectedPlayerId)
 		ev.Put("content", NameOf(selectedPlayerId))
+	Else If etype = "CORNER" Or etype = "PENALTY" Then
+		If selectedTeamB Then
+			details.Put("team", "B")
+		Else
+			details.Put("team", "A")
+		End If
+		ev.Put("content", SetPieceContent(etype, selectedTeamB))
 	Else
 		Dim note As String = edtContent.Text.Trim
 		If note = "" Then
@@ -665,6 +681,13 @@ Private Sub btnSave_Click
 	CallSubDelayed(B4XPages.GetPage("LiveFeed"), "RecomputeScoresAndStats")
 	ToastMessageShow("Event saved", False)
 	B4XPages.ShowPage("LiveFeed")
+End Sub
+
+Private Sub SetPieceContent(etype As String, teamB As Boolean) As String
+	Dim side As String = "(us)"
+	If teamB Then side = "(them)"
+	If etype = "PENALTY" Then Return "Penalty " & side
+	Return "Corner " & side
 End Sub
 
 Private Sub btnBack_Click

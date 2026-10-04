@@ -854,6 +854,12 @@ Public Sub CreateTimelineItem(Width As Int, ev As Map, nameById As Map, isFirst 
 		Dim cardPid As String = details.GetDefault("player", "")
 		mainText = ResolveName(nameById, cardPid, StripCardPrefix(mainText))
 		mainWrap = True
+	Else If etype = "CORNER" Or etype = "PENALTY" Then
+		If details.GetDefault("team", "A") = "B" Then
+			mainText = "Opposition"
+		Else
+			mainText = "Our team"
+		End If
 	Else If etype = "COMMENT" Then
 		mainWrap = True
 	Else
@@ -962,6 +968,10 @@ Private Sub FriendlyType(etype As String) As String
 			Return "SUBSTITUTION"
 		Case "COMMENT"
 			Return "COMMENTARY"
+		Case "CORNER"
+			Return "CORNER"
+		Case "PENALTY"
+			Return "PENALTY"
 		Case Else
 			Return etype
 	End Select
@@ -997,6 +1007,10 @@ Private Sub TypeColor(etype As String) As Int
 			Return 0xFF38BDF8
 		Case "COMMENT"
 			Return 0xFF6366F1
+		Case "CORNER"
+			Return 0xFF14B8A6
+		Case "PENALTY"
+			Return 0xFFA855F7
 		Case Else
 			Return 0xFF94A3B8
 	End Select

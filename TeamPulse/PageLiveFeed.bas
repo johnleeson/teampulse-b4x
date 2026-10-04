@@ -110,9 +110,15 @@ Private Sub BuildUI
 	AddAction("RESET", "btnReset", Root.Width * 3 / 4 + 4dip, row, 0xFF334155)
 	
 	row = top + 210dip
+	AddAction("Corner" & CRLF & "(us)", "btnCornerUs", 8dip, row, 0xFF0F766E)
+	AddAction("Corner" & CRLF & "(them)", "btnCornerThem", Root.Width / 4 + 4dip, row, 0xFF115E59)
+	AddAction("Penalty" & CRLF & "(us)", "btnPenUs", Root.Width / 2 + 4dip, row, 0xFF7C3AED)
+	AddAction("Penalty" & CRLF & "(them)", "btnPenThem", Root.Width * 3 / 4 + 4dip, row, 0xFF5B21B6)
+	
+	row = top + 262dip
 	AddAction("NOTE", "btnComment", 8dip, row, 0xFF6366F1)
 	
-	Dim listTop As Int = top + 262dip
+	Dim listTop As Int = top + 314dip
 	clv = modUI.AddCustomListViewThemed(Root, 0, listTop, Root.Width, Root.Height - listTop - 8dip, Me, "clv", True)
 End Sub
 
@@ -121,7 +127,11 @@ Private Sub AddAction(text As String, event As String, left As Int, top As Int, 
 	b.Initialize(event)
 	b.Text = text
 	b.TextSize = 11
-	If text.Length > 6 Then b.TextSize = 10
+	If text.Length > 10 Then
+		b.TextSize = 9
+	Else If text.Length > 6 Then
+		b.TextSize = 10
+	End If
 	b.SingleLine = False
 	b.Color = col
 	b.TextColor = Colors.White
@@ -415,6 +425,30 @@ Private Sub btnRC_Click
 	AddEvent("RED_CARD", NameForId(pid), details)
 	RecomputeScoresAndStats
 	Refresh
+End Sub
+
+Private Sub btnCornerUs_Click
+	LogSetPiece("CORNER", "A", "Corner (us)")
+End Sub
+
+Private Sub btnCornerThem_Click
+	LogSetPiece("CORNER", "B", "Corner (them)")
+End Sub
+
+Private Sub btnPenUs_Click
+	LogSetPiece("PENALTY", "A", "Penalty (us)")
+End Sub
+
+Private Sub btnPenThem_Click
+	LogSetPiece("PENALTY", "B", "Penalty (them)")
+End Sub
+
+Private Sub LogSetPiece(etype As String, team As String, content As String)
+	Dim details As Map
+	details.Initialize
+	details.Put("team", team)
+	StampTimeDetails(details)
+	AddEvent(etype, content, details)
 End Sub
 
 Private Sub btnHT_Click
