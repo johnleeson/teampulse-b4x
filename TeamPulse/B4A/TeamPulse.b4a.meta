@@ -103,6 +103,6 @@ ModuleClosedNodes6=
 ModuleClosedNodes7=
 ModuleClosedNodes8=
 ModuleClosedNodes9=
-NavigationStack=B4XMainPage,B4XPage_Created,22,1,modConfig,Process_Globals,31,0,PageMatchLineup,Class_Globals,7,0,modSubPlanExport,DrawTopText,375,0,modSubPlanExport,ReleaseSheet,458,0,modSubPlanExport,WrapText,454,0,modSubPlanExport,BeginPage,187,0,modSubPlanExport,Process_Globals,25,0,modSubPlanExport,BuildFile,23,0,modLocal,NextEventSend,205,0,modLocal,ForgetMatch,205,0
+NavigationStack=modConfig,Process_Globals,31,0,PageMatchLineup,Class_Globals,7,0,modSubPlanExport,DrawTopText,375,0,modSubPlanExport,ReleaseSheet,458,0,modSubPlanExport,WrapText,454,0,modSubPlanExport,BeginPage,187,0,modSubPlanExport,Process_Globals,25,0,modSubPlanExport,BuildFile,23,0,modLocal,ForgetMatch,205,0,modLocal,NextEventSend,241,0
 SelectedBuild=0
 VisibleModules=1,21,18,17,16,22,23,20,24,5,9

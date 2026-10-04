@@ -773,29 +773,28 @@ Private Sub BuildSubSheet
 	subSheet.Color = 0xFF0F172A
 	subSheet.Elevation = 24dip
 	Root.AddView(subSheet, 0, 0, Root.Width, Root.Height)
-	Dim btnCancel As Button
-	btnCancel.Initialize("btnSubCancel")
-	btnCancel.Text = "Cancel"
-	btnCancel.TextColor = Colors.White
-	btnCancel.TextSize = 16
-	btnCancel.Color = 0xFF334155
-	subSheet.AddView(btnCancel, 12dip, 8dip, Root.Width - 24dip, 44dip)
+	Dim btnBack As Button = modUI.CreateChromeIconButton("btnSubCancel", "←", Colors.Transparent, Colors.White)
+	btnBack.TextSize = 26
+	subSheet.AddView(btnBack, 4dip, 6dip, 44dip, 44dip)
 	subHint.Initialize("")
 	subHint.TextColor = Colors.White
 	subHint.TextSize = 15
 	subHint.Typeface = Typeface.DEFAULT_BOLD
-	subHint.Gravity = Gravity.CENTER
+	subHint.Gravity = Bit.Or(Gravity.LEFT, Gravity.CENTER_VERTICAL)
 	subHint.SingleLine = False
-	subSheet.AddView(subHint, 12dip, 56dip, Root.Width - 24dip, 44dip)
+	subSheet.AddView(subHint, 52dip, 6dip, Root.Width - 64dip, 48dip)
 	chipHost.Initialize("subSheetBlock")
 	chipHost.Color = 0xFF0F172A
-	subSheet.AddView(chipHost, 0, 108dip, Root.Width, 0)
+	subSheet.AddView(chipHost, 0, 64dip, Root.Width, 0)
 	subPitch.Initialize("subSheetBlock")
-	subPitch.Color = 0xFF166534
-	subSheet.AddView(subPitch, 8dip, 108dip, Root.Width - 16dip, 0)
+	subPitch.Color = 0xFF15803D
+	Dim pitchBg As ColorDrawable
+	pitchBg.Initialize2(0xFF15803D, 12dip, 2dip, Colors.ARGB(180, 22, 101, 52))
+	subPitch.Background = pitchBg
+	subSheet.AddView(subPitch, 8dip, 64dip, Root.Width - 16dip, 0)
 	benchScroll.Initialize(200dip)
 	benchScroll.Color = 0xFF0F172A
-	subSheet.AddView(benchScroll, 0, 108dip, Root.Width, 80dip)
+	subSheet.AddView(benchScroll, 0, 64dip, Root.Width, 80dip)
 	benchScroll.Panel.Color = 0xFF0F172A
 	benchHost.Initialize("subSheetBlock")
 	benchHost.Color = 0xFF0F172A
@@ -826,7 +825,7 @@ Private Sub DrawSheet
 	Else
 		subHint.Text = "Tap who is coming on"
 	End If
-	Dim y As Int = 108dip
+	Dim y As Int = 64dip
 	Dim chipH As Int = 0
 	If sheetChips.IsInitialized And sheetChips.Size > 0 Then chipH = 88dip
 	chipHost.SetLayout(0, y, Root.Width, chipH)
@@ -867,6 +866,10 @@ End Sub
 Private Sub DrawPitch(lineup As Map)
 	subPitch.RemoveAllViews
 	If subPitch.Width < 2dip Or subPitch.Height < 2dip Then Return
+	subPitch.Color = 0xFF15803D
+	Dim pitchBg As ColorDrawable
+	pitchBg.Initialize2(0xFF15803D, 12dip, 2dip, Colors.ARGB(180, 22, 101, 52))
+	subPitch.Background = pitchBg
 	modUI.PaintPitchMarkings(subPitch)
 	Dim formName As String = ""
 	If match.IsInitialized Then formName = match.GetDefault("formation", "")
@@ -1196,44 +1199,40 @@ Private Sub WriteAndShareTimeline As String
 		oldest.Add(newest.Get(i))
 	Next
 	Dim names As Map = NameByIdMap
+	Dim scale As Float = ShareTextScale
+	Dim width As Int = 1080
+	Dim pad As Int = 56
+	Dim maxW As Float = width - pad * 2
+	Dim probeBmp As Bitmap
+	probeBmp.InitializeMutable(16, 16)
+	Dim measureCvs As Canvas
+	measureCvs.Initialize2(probeBmp)
 	Dim drawn As List
 	drawn.Initialize
-	AddShareLine(drawn, "title", match.GetDefault("title", "Match"))
-	AddShareLine(drawn, "score", match.GetDefault("scoreA", 0) & "  -  " & match.GetDefault("scoreB", 0))
+	AddWrappedShareLines(drawn, measureCvs, scale, "title", match.GetDefault("title", "Match"), maxW)
+	AddWrappedShareLines(drawn, measureCvs, scale, "score", match.GetDefault("scoreA", 0) & " - " & match.GetDefault("scoreB", 0), maxW)
 	AddShareLine(drawn, "gap", "")
 	If oldest.Size = 0 Then
-		AddShareLine(drawn, "body", "No events yet")
+		AddWrappedShareLines(drawn, measureCvs, scale, "body", "No events yet", maxW)
 	Else
 		For i = 0 To oldest.Size - 1
 			Dim ev As Map = oldest.Get(i)
 			Dim lines As Map = modUI.TimelineLines(ev, names)
-			AddShareLine(drawn, "meta", lines.Get("minute") & "    " & lines.Get("clock") & "    " & lines.Get("typeLabel"))
+			AddWrappedShareLines(drawn, measureCvs, scale, "meta", lines.Get("minute") & "   " & lines.Get("clock") & "   " & lines.Get("typeLabel"), maxW)
 			Dim mainText As String = lines.Get("main")
-			Dim wrapped As List = WrapShareText(mainText, 42)
-			Dim w As Int
-			For w = 0 To wrapped.Size - 1
-				AddShareLine(drawn, "body", wrapped.Get(w))
-			Next
+			If mainText <> "" Then AddWrappedShareLines(drawn, measureCvs, scale, "body", mainText, maxW)
 			Dim line2 As String = lines.Get("line2")
-			If line2 <> "" Then
-				Dim wrapped2 As List = WrapShareText(line2, 42)
-				For w = 0 To wrapped2.Size - 1
-					AddShareLine(drawn, "sub", wrapped2.Get(w))
-				Next
-			End If
+			If line2 <> "" Then AddWrappedShareLines(drawn, measureCvs, scale, "sub", line2, maxW)
 			AddShareLine(drawn, "gap", "")
 		Next
 	End If
-	Dim width As Int = 1080
-	Dim pad As Int = 64
 	Dim height As Int = pad
 	For i = 0 To drawn.Size - 1
-		Dim measure As Map = drawn.Get(i)
-		height = height + ShareLineStep(measure.Get("kind"))
+		height = height + ShareRowHeight(measureCvs, scale, drawn.Get(i))
 	Next
 	height = height + pad
 	If height < 480 Then height = 480
-	If height > 8192 Then height = 8192
+	If height > 12000 Then height = 12000
 	Dim bmp As Bitmap
 	bmp.InitializeMutable(width, height)
 	Dim cvs As Canvas
@@ -1244,34 +1243,18 @@ Private Sub WriteAndShareTimeline As String
 	Dim y As Int = pad
 	For i = 0 To drawn.Size - 1
 		Dim row As Map = drawn.Get(i)
+		Dim rowH As Int = ShareRowHeight(cvs, scale, row)
+		If y + rowH > height - pad Then Exit
 		Dim kind As String = row.Get("kind")
-		Dim lineStep As Int = ShareLineStep(kind)
-		If y + lineStep > height - 24 Then Exit
 		If kind = "gap" Then
-			y = y + lineStep
+			y = y + rowH
 			Continue
 		End If
-		Dim text As String = row.Get("text")
-		Dim size As Float = 32
-		Dim col As Int = 0xFFE2E8F0
-		Dim face As Typeface = Typeface.DEFAULT
-		If kind = "title" Then
-			size = 48
-			col = Colors.White
-			face = Typeface.DEFAULT_BOLD
-		Else If kind = "score" Then
-			size = 68
-			col = Colors.White
-			face = Typeface.DEFAULT_BOLD
-		Else If kind = "meta" Then
-			size = 28
-			col = 0xFF38BDF8
-			face = Typeface.DEFAULT_BOLD
-		Else If kind = "sub" Then
-			col = 0xFF94A3B8
-		End If
-		cvs.DrawText(text, pad, y + lineStep - 14, face, size, col, "LEFT")
-		y = y + lineStep
+		Dim face As Typeface = ShareFace(kind)
+		Dim size As Float = SharePx(kind) / scale
+		Dim textH As Float = cvs.MeasureStringHeight("Ag", face, size)
+		cvs.DrawText(row.Get("text"), pad, y + textH, face, size, ShareColor(kind), "LEFT")
+		y = y + rowH
 	Next
 	File.MakeDir(File.DirInternal, "shared")
 	Dim dir As String = File.Combine(File.DirInternal, "shared")
@@ -1289,11 +1272,60 @@ Private Sub WriteAndShareTimeline As String
 	Return modExport.ShareDocument(dir, fileName, "image/jpeg", "Share timeline")
 End Sub
 
-Private Sub ShareLineStep(kind As String) As Int
-	If kind = "gap" Then Return 28
-	If kind = "title" Then Return 72
-	If kind = "score" Then Return 96
-	Return 48
+' Canvas text size is scaled by the screen density. Divide so sizes below are real pixels on the bitmap.
+Private Sub ShareTextScale As Float
+	Dim scale As Float = 1
+	Try
+		Dim jo As JavaObject
+		jo.InitializeContext
+		Dim res As JavaObject = jo.RunMethod("getResources", Null)
+		Dim metrics As JavaObject = res.RunMethod("getDisplayMetrics", Null)
+		scale = metrics.GetField("scaledDensity")
+	Catch
+		Log("ShareTextScale: " & LastException)
+		scale = 1
+	End Try
+	If scale <= 0 Then scale = 1
+	Return scale
+End Sub
+
+Private Sub SharePx(kind As String) As Float
+	If kind = "title" Then Return 44
+	If kind = "score" Then Return 60
+	If kind = "meta" Then Return 28
+	If kind = "sub" Then Return 30
+	Return 32
+End Sub
+
+Private Sub ShareFace(kind As String) As Typeface
+	If kind = "title" Or kind = "score" Or kind = "meta" Then Return Typeface.DEFAULT_BOLD
+	Return Typeface.DEFAULT
+End Sub
+
+Private Sub ShareColor(kind As String) As Int
+	If kind = "title" Or kind = "score" Then Return Colors.White
+	If kind = "meta" Then Return 0xFF38BDF8
+	If kind = "sub" Then Return 0xFF94A3B8
+	Return 0xFFE2E8F0
+End Sub
+
+Private Sub ShareRowHeight(cvs As Canvas, scale As Float, row As Map) As Int
+	Dim kind As String = row.Get("kind")
+	If kind = "gap" Then Return 20
+	Dim face As Typeface = ShareFace(kind)
+	Dim size As Float = SharePx(kind) / scale
+	Dim h As Float = cvs.MeasureStringHeight("Ag", face, size)
+	Return h + 14
+End Sub
+
+Private Sub AddWrappedShareLines(lines As List, cvs As Canvas, scale As Float, kind As String, text As String, maxW As Float)
+	Dim face As Typeface = ShareFace(kind)
+	Dim size As Float = SharePx(kind) / scale
+	Dim parts As List = WrapShareToWidth(cvs, text, face, size, maxW)
+	Dim i As Int
+	For i = 0 To parts.Size - 1
+		AddShareLine(lines, kind, parts.Get(i))
+	Next
 End Sub
 
 Private Sub AddShareLine(lines As List, kind As String, text As String)
@@ -1304,22 +1336,46 @@ Private Sub AddShareLine(lines As List, kind As String, text As String)
 	lines.Add(row)
 End Sub
 
-Private Sub WrapShareText(text As String, maxChars As Int) As List
+Private Sub WrapShareToWidth(cvs As Canvas, text As String, face As Typeface, size As Float, maxW As Float) As List
 	Dim lines As List
 	lines.Initialize
-	Dim rest As String = text
+	Dim rest As String = text.Trim
 	If rest = "" Then
 		lines.Add("")
 		Return lines
 	End If
-	Do While rest.Length > maxChars
-		Dim cut As Int = rest.LastIndexOf2(" ", maxChars)
-		If cut < 8 Then cut = maxChars
-		lines.Add(rest.SubString2(0, cut).Trim)
+	Do While rest <> ""
+		If cvs.MeasureStringWidth(rest, face, size) <= maxW Then
+			lines.Add(rest)
+			Exit
+		End If
+		Dim cut As Int = FitShareCut(cvs, rest, face, size, maxW)
+		If cut < 1 Then cut = 1
+		Dim piece As String = rest.SubString2(0, cut).Trim
+		If piece = "" Then piece = rest.SubString2(0, cut)
+		lines.Add(piece)
 		rest = rest.SubString(cut).Trim
 	Loop
-	If rest <> "" Then lines.Add(rest)
 	Return lines
+End Sub
+
+' Last character index that still fits, preferring a space.
+Private Sub FitShareCut(cvs As Canvas, text As String, face As Typeface, size As Float, maxW As Float) As Int
+	Dim lo As Int = 1
+	Dim hi As Int = text.Length - 1
+	Dim best As Int = 1
+	Do While lo <= hi
+		Dim mid As Int = (lo + hi) / 2
+		If cvs.MeasureStringWidth(text.SubString2(0, mid), face, size) <= maxW Then
+			best = mid
+			lo = mid + 1
+		Else
+			hi = mid - 1
+		End If
+	Loop
+	Dim space As Int = text.LastIndexOf2(" ", best)
+	If space > 8 Then Return space
+	Return best
 End Sub
 
 Private Sub ShareStamp As String
