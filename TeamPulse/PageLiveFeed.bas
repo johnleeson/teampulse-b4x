@@ -195,18 +195,30 @@ Public Sub Refresh
 	clv.Clear
 	Dim events As List = modAppState.EventsNewestFirst(match.Get("id"))
 	Dim names As Map = NameByIdMap
+	Dim sides As Map = SideNames
+	Dim planned As List = OpenPlannedSwaps
 	Dim cardW As Int = modUI.ViewWidth(Root) - 16dip
 	Dim i As Int
+	For i = 0 To planned.Size - 1
+		Dim swap As Map = planned.Get(i)
+		Dim plannedEv As Map = PlannedSubEvent(swap)
+		Dim planFirst As Boolean = (i = 0)
+		Dim planLast As Boolean = (i = planned.Size - 1 And events.Size = 0)
+		Dim planCard As Panel = BuildPlannedRow(cardW, plannedEv, names, sides, planFirst, planLast)
+		Dim planH As Int = modUI.TimelineItemHeight(plannedEv)
+		modUI.PlaceView(planCard, 0, 0, cardW, planH)
+		clv.Add(planCard, "plan:" & swap.GetDefault("index", i))
+	Next
 	For i = 0 To events.Size - 1
 		Dim e As Map = events.Get(i)
-		Dim isFirst As Boolean = (i = 0)
+		Dim isFirst As Boolean = (planned.Size = 0 And i = 0)
 		Dim isLast As Boolean = (i = events.Size - 1)
-		Dim card As Panel = BuildTimelineRow(cardW, e, names, isFirst, isLast)
+		Dim card As Panel = BuildTimelineRow(cardW, e, names, sides, isFirst, isLast)
 		Dim h As Int = modUI.TimelineItemHeight(e)
 		modUI.PlaceView(card, 0, 0, cardW, h)
 		clv.Add(card, e.GetDefault("id", ""))
 	Next
-	If events.Size = 0 Then
+	If planned.Size = 0 And events.Size = 0 Then
 		Dim empty As Panel
 		empty.Initialize("")
 		empty.Color = 0xFF0F172A
@@ -233,8 +245,157 @@ Private Sub NameByIdMap As Map
 	Return m
 End Sub
 
-Private Sub BuildTimelineRow(Width As Int, ev As Map, names As Map, isFirst As Boolean, isLast As Boolean) As Panel
-	Dim row As Panel = modUI.CreateTimelineItem(Width, ev, names, isFirst, isLast)
+Private Sub SideNames As Map
+	Dim m As Map
+	m.Initialize
+	Dim ours As String = ""
+	Dim clubId As String = ""
+	If match.IsInitialized Then clubId = match.GetDefault("clubId", "")
+	Dim c As Map = modAppState.FindClub(clubId)
+	If c.IsInitialized Then ours = ("" & c.GetDefault("name", "")).Trim
+	If ours = "" Or ours = "null" Then ours = "Our team"
+	Dim opp As String = ""
+	If match.IsInitialized Then opp = ("" & match.GetDefault("opponentName", "")).Trim
+	If opp = "" Or opp = "null" Then opp = "Opposition"
+	m.Put("A", ours)
+	m.Put("B", opp)
+	Return m
+End Sub
+
+Private Sub OpenPlannedSwaps As List
+	Dim none As List
+	none.Initialize
+	If match.IsInitialized = False Then Return none
+	If match.GetDefault("status", "") <> "LIVE" Then Return none
+	Dim planObj As Object = match.GetDefault("subPlan", Null)
+	If planObj = Null Or Not(planObj Is Map) Then Return none
+	Dim plan As Map = planObj
+	Dim playing As Int = modAppState.PlayingMinuteAt(match, DateTime.Now)
+	Dim open As List = modSubPlanner.NextOpenSwaps(plan, LoggedTeamSubs, modAppState.LineupAfterSubs(match))
+	Dim i As Int
+	For i = 0 To open.Size - 1
+		Dim row As Map = open.Get(i)
+		Dim target As Int = row.GetDefault("minute", 0)
+		row.Put("due", playing >= target)
+	Next
+	Return open
+End Sub
+
+Private Sub LoggedTeamSubs As List
+	Dim out As List
+	out.Initialize
+	Dim events As List = modAppState.EventsForMatch(match.GetDefault("id", ""))
+	Dim i As Int
+	For i = 0 To events.Size - 1
+		Dim e As Map = events.Get(i)
+		If e.GetDefault("type", "") <> "SUB" Then Continue
+		Dim details As Map
+		Dim dObj As Object = e.GetDefault("details", Null)
+		If dObj <> Null And dObj Is Map Then
+			details = dObj
+		Else
+			Continue
+		End If
+		If details.GetDefault("team", "A") = "B" Then Continue
+		Dim row As Map
+		row.Initialize
+		row.Put("playerOut", "" & details.GetDefault("playerOut", ""))
+		row.Put("playerIn", "" & details.GetDefault("playerIn", ""))
+		out.Add(row)
+	Next
+	Return out
+End Sub
+
+Private Sub PlannedSubEvent(swap As Map) As Map
+	Dim outName As String = swap.GetDefault("outName", "")
+	Dim inName As String = swap.GetDefault("inName", "")
+	If outName = "" Then outName = NameForId(swap.GetDefault("playerOut", ""))
+	If inName = "" Then inName = NameForId(swap.GetDefault("playerIn", ""))
+	Dim details As Map
+	details.Initialize
+	details.Put("team", "A")
+	details.Put("playerOut", swap.GetDefault("playerOut", ""))
+	details.Put("playerIn", swap.GetDefault("playerIn", ""))
+	details.Put("minute", swap.GetDefault("minute", 0))
+	details.Put("clockTime", "Q" & (swap.GetDefault("afterQuarter", 0) + 1))
+	details.Put("due", swap.GetDefault("due", False))
+	details.Put("swapIndex", swap.GetDefault("index", 0))
+	Dim ev As Map
+	ev.Initialize
+	ev.Put("type", "PLANNED_SUB")
+	ev.Put("content", outName & " → " & inName)
+	ev.Put("details", details)
+	Return ev
+End Sub
+
+Private Sub BuildPlannedRow(Width As Int, ev As Map, names As Map, sides As Map, isFirst As Boolean, isLast As Boolean) As Panel
+	Dim row As Panel = modUI.CreateTimelineItem(Width, ev, names, sides, isFirst, isLast)
+	Dim details As Map = ev.Get("details")
+	Dim idx As Int = details.GetDefault("swapIndex", 0)
+	Dim h As Int = modUI.TimelineItemHeight(ev)
+	Dim btnW As Int = 72dip
+	Dim btnH As Int = 28dip
+	Dim left As Int = Width - btnW - 10dip
+	Dim btnConfirm As Button
+	modUI.InitButton(Me, btnConfirm, "btnPlanConfirm")
+	btnConfirm.Text = "Confirm"
+	modUI.SetTextSize(btnConfirm, 11)
+	modUI.SetBold(btnConfirm, True)
+	btnConfirm.Color = modConfig.COLOR_SUCCESS
+	modUI.SetButtonTextColor(btnConfirm, Colors.White)
+	btnConfirm.Tag = idx
+	row.AddView(btnConfirm, left, 16dip, btnW, btnH)
+	Dim btnSkip As Button
+	modUI.InitButton(Me, btnSkip, "btnPlanSkip")
+	btnSkip.Text = "Skip"
+	modUI.SetTextSize(btnSkip, 11)
+	modUI.SetBold(btnSkip, True)
+	btnSkip.Color = 0xFF334155
+	modUI.SetButtonTextColor(btnSkip, Colors.White)
+	btnSkip.Tag = idx
+	row.AddView(btnSkip, left, h - btnH - 16dip, btnW, btnH)
+	Return row
+End Sub
+
+Private Sub btnPlanConfirm_Click
+	If actionsLocked Then Return
+	Dim b As Button = modUI.ClickedButton(Sender)
+	Dim swap As Map = SwapAtIndex(b.Tag)
+	If swap.ContainsKey("playerOut") = False Then Return
+	Dim pout As String = swap.GetDefault("playerOut", "")
+	Dim pin As String = swap.GetDefault("playerIn", "")
+	If pout = "" Or pin = "" Then Return
+	LogSub(pout, pin, NameForId(pout), NameForId(pin))
+End Sub
+
+Private Sub btnPlanSkip_Click
+	If actionsLocked Then Return
+	Dim b As Button = modUI.ClickedButton(Sender)
+	Dim swap As Map = SwapAtIndex(b.Tag)
+	If swap.ContainsKey("playerOut") = False Then Return
+	swap.Put("skipped", True)
+	modDb.SaveMatch(match)
+	modAppState.UpsertMatch(match)
+	Refresh
+End Sub
+
+Private Sub SwapAtIndex(rawIndex As Object) As Map
+	Dim empty As Map
+	empty.Initialize
+	Dim idx As Int = rawIndex
+	If match.IsInitialized = False Then Return empty
+	Dim planObj As Object = match.GetDefault("subPlan", Null)
+	If planObj = Null Or Not(planObj Is Map) Then Return empty
+	Dim plan As Map = planObj
+	Dim swaps As List = plan.GetDefault("swaps", EmptyList)
+	If idx < 0 Or idx >= swaps.Size Then Return empty
+	Dim raw As Object = swaps.Get(idx)
+	If Not(raw Is Map) Then Return empty
+	Return raw
+End Sub
+
+Private Sub BuildTimelineRow(Width As Int, ev As Map, names As Map, sides As Map, isFirst As Boolean, isLast As Boolean) As Panel
+	Dim row As Panel = modUI.CreateTimelineItem(Width, ev, names, sides, isFirst, isLast)
 	Dim eid As String = ev.GetDefault("id", "")
 	Dim h As Int = modUI.TimelineItemHeight(ev)
 	Dim btnSize As Int = 34dip
@@ -565,7 +726,8 @@ Private Sub LogShootoutKick(st As Map) As ResumableSub
 			modPlatform.Toast("No players in club", False)
 			Return False
 		End If
-		Wait For (ShowPick("Who's taking it?", EmptyChipList, True, "")) Complete (playerId)
+		Wait For (ShowPick("Who's taking it?", EmptyChipList, True, "")) Complete (pickedId As String)
+		playerId = pickedId
 		If playerId = "" Then Return False
 		playerName = NameForId(playerId)
 	End If
@@ -1343,7 +1505,7 @@ Private Sub WriteAndShareTimeline As String
 	Else
 		For i = 0 To oldest.Size - 1
 			Dim ev As Map = oldest.Get(i)
-			Dim lines As Map = modUI.TimelineLines(ev, names)
+			Dim lines As Map = modUI.TimelineLines(ev, names, SideNames)
 			AddWrappedShareLines(drawn, measureCvs, scale, "meta", lines.Get("minute") & "   " & lines.Get("clock") & "   " & lines.Get("typeLabel"), maxW)
 			Dim mainText As String = lines.Get("main")
 			If mainText <> "" Then AddWrappedShareLines(drawn, measureCvs, scale, "body", mainText, maxW)

@@ -282,8 +282,8 @@ Public Sub ShootoutState(matchId As String) As Map
 	Dim scoredA As Int
 	Dim scoredB As Int
 	For i = 0 To kicks.Size - 1
-		Dim kick As Map = kicks.Get(i)
-		Dim kd As Map = DetailsOf(kick)
+		Dim kickEv As Map = kicks.Get(i)
+		Dim kd As Map = DetailsOf(kickEv)
 		If kd.GetDefault("team", "A") = "B" Then
 			takenB = takenB + 1
 			If IsFlag(kd, "scored") Then scoredB = scoredB + 1
@@ -342,13 +342,13 @@ Public Sub SyncShootoutFlags(matchId As String) As Boolean
 	Dim takenB As Int
 	Dim changed As Boolean
 	For i = 0 To kicks.Size - 1
-		Dim kick As Map = kicks.Get(i)
-		Dim kd As Map = DetailsOf(kick)
+		Dim kickEv As Map = kicks.Get(i)
+		Dim kd As Map = DetailsOf(kickEv)
 		Dim sd As Boolean = (takenA >= n And takenB >= n)
 		If IsFlag(kd, "suddenDeath") <> sd Then
 			kd.Put("suddenDeath", sd)
-			kick.Put("details", kd)
-			QueueEventUpsert(kick)
+			kickEv.Put("details", kd)
+			QueueEventUpsert(kickEv)
 			changed = True
 		End If
 		If kd.GetDefault("team", "A") = "B" Then

@@ -1109,7 +1109,7 @@ Public Sub TimelineItemHeight(ev As Map) As Int
 		details.Initialize
 	End If
 	Dim etype As String = ev.GetDefault("type", "")
-	If etype = "SUB" Then Return 130dip
+	If etype = "SUB" Or etype = "PLANNED_SUB" Then Return 130dip
 	If etype = "GOAL" Then
 		Dim assistId As String = details.GetDefault("assist", "")
 		Dim assistUnknown As String = "" & details.GetDefault("assistUnknown", False)
@@ -1127,7 +1127,7 @@ Public Sub TimelineItemHeight(ev As Map) As Int
 End Sub
 
 ' Text shown on a timeline card and on the shared image. Keys: typeLabel, minute, clock, main, line2, line2Color, mainWrap.
-Public Sub TimelineLines(ev As Map, nameById As Map) As Map
+Public Sub TimelineLines(ev As Map, nameById As Map, sideNames As Map) As Map
 	Dim details As Map
 	Dim dObj As Object = ev.GetDefault("details", Null)
 	If dObj <> Null And dObj Is Map Then
@@ -1151,12 +1151,12 @@ Public Sub TimelineLines(ev As Map, nameById As Map) As Map
 		If ownGoal Then
 			mainText = "Own goal"
 			If team = "B" Then
-				line2Text = "Our team"
+				line2Text = SideLabel(sideNames, "A", "Our team")
 			Else
-				line2Text = "Opposition"
+				line2Text = SideLabel(sideNames, "B", "Opposition")
 			End If
 		Else If team = "B" Then
-			mainText = "Opposition goal"
+			mainText = SideLabel(sideNames, "B", "Opposition")
 			line2Text = ""
 		Else
 			Dim scorerId As String = details.GetDefault("scorer", "")
@@ -1171,11 +1171,11 @@ Public Sub TimelineLines(ev As Map, nameById As Map) As Map
 			Else If assistUnknown = "true" Then
 				line2Text = "Assist unknown"
 			Else
-				line2Text = "Our team"
+				line2Text = SideLabel(sideNames, "A", "Our team")
 				line2Color = 0xFF64748B
 			End If
 		End If
-	Else If etype = "SUB" Then
+	Else If etype = "SUB" Or etype = "PLANNED_SUB" Then
 		Dim outId As String = details.GetDefault("playerOut", "")
 		Dim inId As String = details.GetDefault("playerIn", "")
 		Dim outName As String = ResolveName(nameById, outId, "")
@@ -1194,24 +1194,24 @@ Public Sub TimelineLines(ev As Map, nameById As Map) As Map
 		mainWrap = True
 	Else If etype = "CORNER" Or etype = "PENALTY" Then
 		If details.GetDefault("team", "A") = "B" Then
-			mainText = "Opposition"
+			mainText = SideLabel(sideNames, "B", "Opposition")
 		Else
-			mainText = "Our team"
+			mainText = SideLabel(sideNames, "A", "Our team")
 		End If
 	Else If etype = "SHOOTOUT" Then
 		If details.GetDefault("kind", "") = "setup" Then
 			mainText = details.GetDefault("kicksEach", 0) & " each"
 			If details.GetDefault("firstTeam", "A") = "B" Then
-				line2Text = "Opposition start"
+				line2Text = SideLabel(sideNames, "B", "Opposition") & " start"
 			Else
-				line2Text = "We start"
+				line2Text = SideLabel(sideNames, "A", "Our team") & " start"
 			End If
 		Else
 			If details.GetDefault("team", "A") = "B" Then
-				mainText = "Opposition"
+				mainText = SideLabel(sideNames, "B", "Opposition")
 			Else
 				Dim takerId As String = details.GetDefault("player", "")
-				mainText = ResolveName(nameById, takerId, "Our team")
+				mainText = ResolveName(nameById, takerId, SideLabel(sideNames, "A", "Our team"))
 			End If
 			If modLocal.IsFlag(details, "scored") Then
 				line2Text = "Scored"
@@ -1230,6 +1230,7 @@ Public Sub TimelineLines(ev As Map, nameById As Map) As Map
 	If etype = "SHOOTOUT" And details.GetDefault("kind", "") <> "setup" And modLocal.IsFlag(details, "suddenDeath") Then
 		typeLabel = "SUDDEN DEATH"
 	End If
+	If etype = "PLANNED_SUB" And modLocal.IsFlag(details, "due") Then typeLabel = "DUE"
 	Dim out As Map
 	out.Initialize
 	out.Put("typeLabel", typeLabel)
@@ -1243,7 +1244,7 @@ Public Sub TimelineLines(ev As Map, nameById As Map) As Map
 End Sub
 
 ' Timeline row: rail + node + dark card. nameById used for goal scorer/assist lines.
-Public Sub CreateTimelineItem(Width As Int, ev As Map, nameById As Map, isFirst As Boolean, isLast As Boolean) As Panel
+Public Sub CreateTimelineItem(Width As Int, ev As Map, nameById As Map, sideNames As Map, isFirst As Boolean, isLast As Boolean) As Panel
 	Dim h As Int = TimelineItemHeight(ev)
 	Dim railW As Int = 28dip
 	Dim row As Panel
@@ -1263,9 +1264,9 @@ Public Sub CreateTimelineItem(Width As Int, ev As Map, nameById As Map, isFirst 
 		row.AddView(lineBot, railW / 2 - 1dip, h / 2 + 5dip, 2dip, h / 2 - 5dip)
 	End If
 	Dim etype As String = ev.GetDefault("type", "EVENT")
-	Dim lines As Map = TimelineLines(ev, nameById)
+	Dim lines As Map = TimelineLines(ev, nameById, sideNames)
 	Dim nodeCol As Int = TypeColor(etype)
-	If lines.GetDefault("typeLabel", "") = "SUDDEN DEATH" Then nodeCol = 0xFFF97316
+	If lines.GetDefault("typeLabel", "") = "SUDDEN DEATH" Or lines.GetDefault("typeLabel", "") = "DUE" Then nodeCol = 0xFFF97316
 	Dim node As Panel
 	node.Initialize("")
 	RoundView(node, nodeCol, 8dip)
@@ -1295,8 +1296,10 @@ Public Sub CreateTimelineItem(Width As Int, ev As Map, nameById As Map, isFirst 
 	SetAlign(lblClock, "CENTER", "CENTER")
 	card.AddView(lblClock, 10dip, 36dip, 44dip, 16dip)
 	Dim textLeft As Int = 58dip
-	' Leave room for edit/delete overlay buttons on the right of the row
-	Dim textW As Int = cardW - textLeft - 88dip
+	' Leave room for the buttons overlaid on the right of the row.
+	Dim reserve As Int = 88dip
+	If etype = "PLANNED_SUB" Then reserve = 96dip
+	Dim textW As Int = cardW - textLeft - reserve
 	If textW < 80dip Then textW = 80dip
 	Dim lblType As Label
 	lblType.Initialize("")
@@ -1312,7 +1315,7 @@ Public Sub CreateTimelineItem(Width As Int, ev As Map, nameById As Map, isFirst 
 	Dim mainWrap As Boolean = lines.Get("mainWrap")
 	
 	Dim mainH As Int = 22dip
-	If etype = "SUB" Then
+	If etype = "SUB" Or etype = "PLANNED_SUB" Then
 		mainH = 24dip
 		mainWrap = True
 	Else If mainWrap Then
@@ -1340,7 +1343,7 @@ Public Sub CreateTimelineItem(Width As Int, ev As Map, nameById As Map, isFirst 
 		lbl2.Text = line2Text
 		SetTextSize(lbl2, 14)
 		SetBold(lbl2, True)
-		If etype = "SUB" Then
+		If etype = "SUB" Or etype = "PLANNED_SUB" Then
 			lbl2.TextColor = 0xFF4ADE80
 			SetSingleLine(lbl2, False)
 			SetAlign(lbl2, "TOP", "LEFT")
@@ -1355,6 +1358,14 @@ Public Sub CreateTimelineItem(Width As Int, ev As Map, nameById As Map, isFirst 
 		End If
 	End If
 	Return row
+End Sub
+
+Private Sub SideLabel(sideNames As Map, team As String, fallback As String) As String
+	If sideNames.IsInitialized And sideNames.ContainsKey(team) Then
+		Dim n As String = ("" & sideNames.Get(team)).Trim
+		If n <> "" And n <> "null" Then Return n
+	End If
+	Return fallback
 End Sub
 
 Private Sub ResolveName(nameById As Map, playerId As String, fallback As String) As String
@@ -1411,6 +1422,8 @@ Private Sub FriendlyType(etype As String) As String
 			Return "FULL TIME"
 		Case "SUB"
 			Return "SUBSTITUTION"
+		Case "PLANNED_SUB"
+			Return "PLANNED SUB"
 		Case "POSITION"
 			Return "POSITION CHANGE"
 		Case "COMMENT"
@@ -1450,7 +1463,7 @@ Private Sub TypeColor(etype As String) As Int
 			Return 0xFFF59E0B
 		Case "RED_CARD"
 			Return modConfig.COLOR_DANGER
-		Case "SUB"
+		Case "SUB", "PLANNED_SUB"
 			Return modConfig.COLOR_ACCENT
 		Case "POSITION"
 			Return 0xFF2DD4BF

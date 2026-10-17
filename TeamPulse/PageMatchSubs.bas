@@ -678,6 +678,7 @@ Private Sub ShowPlan
 					Dim outN As String = s.GetDefault("outName", names.GetDefault(s.GetDefault("playerOut", ""), "?"))
 					Dim inN As String = s.GetDefault("inName", names.GetDefault(s.GetDefault("playerIn", ""), "?"))
 					Dim label2 As String = outN & " → " & inN
+					If modLocal.IsFlag(s, "skipped") Then label2 = label2 & " · skipped"
 					Dim row As Panel = BuildSwapRow(cardW, label2, si)
 					modUI.PlaceView(row, 0, 0, cardW, 52dip)
 					clv.Add(row, "swap:" & si)

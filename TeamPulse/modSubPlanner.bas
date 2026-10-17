@@ -330,6 +330,79 @@ Public Sub FormatPlanLines(plan As Map, nameById As Map) As List
 	Return lines
 End Sub
 
+' Earliest quarter break that still has swaps to confirm. Each row: index, afterQuarter, minute, playerOut, playerIn, outName, inName.
+' loggedSubs are team-A SUB events already on the feed ({playerOut, playerIn}). One logged sub covers one planned swap.
+Public Sub NextOpenSwaps(plan As Map, loggedSubs As List, lineup As Map) As List
+	Dim none As List
+	none.Initialize
+	If plan.IsInitialized = False Then Return none
+	Dim swaps As List = plan.GetDefault("swaps", EmptyList)
+	If swaps.IsInitialized = False Or swaps.Size = 0 Then Return none
+	If loggedSubs.IsInitialized = False Then loggedSubs = EmptyList
+	Dim used As List
+	used.Initialize
+	Dim s As Int
+	For s = 0 To loggedSubs.Size - 1
+		used.Add(False)
+	Next
+	Dim perQ As Double = MinutesPerQuarter(plan)
+	Dim onPitch As Map = IdsOnPitch(lineup)
+	Dim afterQ As Int
+	For afterQ = 1 To 3
+		Dim bucket As List
+		bucket.Initialize
+		For s = 0 To swaps.Size - 1
+			Dim raw As Object = swaps.Get(s)
+			If Not(raw Is Map) Then Continue
+			Dim swap As Map = raw
+			If afterQ <> swap.GetDefault("afterQuarter", 0) Then Continue
+			If modLocal.IsFlag(swap, "skipped") Then Continue
+			Dim pout As String = swap.GetDefault("playerOut", "")
+			Dim pin As String = swap.GetDefault("playerIn", "")
+			If pout = "" Or pin = "" Then Continue
+			If ConsumeMatchingSub(loggedSubs, used, pout, pin) Then Continue
+			If onPitch.ContainsKey(pout) = False Then Continue
+			If onPitch.ContainsKey(pin) Then Continue
+			Dim row As Map
+			row.Initialize
+			row.Put("index", s)
+			row.Put("afterQuarter", afterQ)
+			row.Put("minute", Round(afterQ * perQ))
+			row.Put("playerOut", pout)
+			row.Put("playerIn", pin)
+			row.Put("outName", swap.GetDefault("outName", ""))
+			row.Put("inName", swap.GetDefault("inName", ""))
+			bucket.Add(row)
+		Next
+		If bucket.Size > 0 Then Return bucket
+	Next
+	Return none
+End Sub
+
+Private Sub ConsumeMatchingSub(loggedSubs As List, used As List, playerOut As String, playerIn As String) As Boolean
+	Dim i As Int
+	For i = 0 To loggedSubs.Size - 1
+		If used.Get(i) = True Then Continue
+		Dim row As Map = loggedSubs.Get(i)
+		If row.GetDefault("playerOut", "") = playerOut And row.GetDefault("playerIn", "") = playerIn Then
+			used.Set(i, True)
+			Return True
+		End If
+	Next
+	Return False
+End Sub
+
+Private Sub IdsOnPitch(lineup As Map) As Map
+	Dim onPitch As Map
+	onPitch.Initialize
+	If lineup.IsInitialized = False Then Return onPitch
+	For Each raw As Object In lineup.Values
+		Dim pid As String = "" & raw
+		If pid <> "" And pid <> "null" Then onPitch.Put(pid, True)
+	Next
+	Return onPitch
+End Sub
+
 Private Sub SortIdsByMinutesDesc(ids As List, minutes As Map) As List
 	Dim out As List = CopyStrList(ids)
 	Dim i, j As Int
