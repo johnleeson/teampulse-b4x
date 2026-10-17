@@ -1,4 +1,5 @@
 ﻿B4A=true
+B4i=true
 Group=Default Group
 ModulesStructureVersion=1
 Type=StaticCode
@@ -17,9 +18,11 @@ Sub Process_Globals
 	Private Const RULE As Int = 0xFFE2E8F0
 	Private Const GRASS As Int = 0xFF15803D
 	Private Const BREAK_COL As Int = 0xFFEA580C
+	Private xui As XUI
 	Private textScale As Float
-	Private sheetBmp As Bitmap
-	Private sheetPdf As JavaObject
+	Private sheetCvs As B4XCanvas
+	Private sheetCvsReady As Boolean
+	Private sheetPages As List
 	Private sheetPage As Int
 	Private sheetY As Int
 	Private sheetTitle As String
@@ -99,14 +102,16 @@ Private Sub SnapshotPitches(pitches As List) As List
 		Dim wrap As Panel = pitches.Get(i)
 		If wrap.IsInitialized = False Then Return images
 		Dim xv As B4XView = wrap
-		Dim jo As JavaObject = wrap
-		Dim w As Int = jo.RunMethod("getWidth", Null)
-		Dim h As Int = jo.RunMethod("getHeight", Null)
+		Dim w As Int = xv.Width
+		Dim h As Int = xv.Height
+#if B4A
 		If w < 2 Or h < 2 Then
-			EnsureViewSize(jo, xv.Width, xv.Height)
+			Dim jo As JavaObject = wrap
+			EnsureViewSize(jo, w, h)
 			w = jo.RunMethod("getWidth", Null)
 			h = jo.RunMethod("getHeight", Null)
 		End If
+#End If
 		If w < 2 Or h < 2 Then
 			Log("Snapshot pitch " & i & " has no size")
 			Return images
@@ -120,12 +125,10 @@ End Sub
 
 Private Sub WritePdf(dir As String, fileName As String, images As List, match As Map, club As Map, plan As Map, _
 		formation As String, nameById As Map, squad As List, squadById As Map, byQ As Map, projected As Map, playerIds As List) As String
-	Dim pdf As JavaObject
 	Try
-		pdf.InitializeNewInstance("android.graphics.pdf.PdfDocument", Null)
-		sheetPdf = pdf
+		sheetPages.Initialize
 		sheetPage = 1
-		Dim cvs As Canvas = BeginPage(False)
+		Dim cvs As B4XCanvas = BeginPage(False)
 		DrawHeader(cvs, match, club, plan)
 		DrawGrid(cvs, images, plan, nameById)
 		sheetY = sheetY + 8
@@ -133,57 +136,42 @@ Private Sub WritePdf(dir As String, fileName As String, images As List, match As
 		cvs = DrawBench(cvs, squad, byQ, formation, nameById)
 		cvs = DrawMinutes(cvs, playerIds, nameById, squadById, plan, projected)
 		FinishCurrentPage(cvs)
-		Dim path As String = File.Combine(dir, fileName)
-		Dim fos As JavaObject
-		fos.InitializeNewInstance("java.io.FileOutputStream", Array(path))
-		pdf.RunMethod("writeTo", Array(fos))
-		fos.RunMethod("close", Null)
-		pdf.RunMethod("close", Null)
-		Return ""
+		Return CommitPdf(File.Combine(dir, fileName))
 	Catch
 		Log("WritePdf: " & LastException)
-		Try
-			If pdf.IsInitialized Then pdf.RunMethod("close", Null)
-		Catch
-			Log("WritePdf close: " & LastException)
-		End Try
 		Return "Could not create the sub plan sheet. Nothing was changed."
 	End Try
 End Sub
 
-Private Sub BeginPage(running As Boolean) As Canvas
-	Dim bmp As Bitmap
-	bmp.InitializeMutable(PAGE_W, PAGE_H)
-	sheetBmp = bmp
-	Dim cvs As Canvas
-	cvs.Initialize2(sheetBmp)
-	Dim full As Rect
+Private Sub BeginPage(running As Boolean) As B4XCanvas
+	Dim sheetPanel As B4XView = xui.CreatePanel("")
+	sheetPanel.SetLayoutAnimated(0, 0, 0, PAGE_W, PAGE_H)
+	Dim cvs As B4XCanvas
+	cvs.Initialize(sheetPanel)
+	sheetCvs = cvs
+	sheetCvsReady = True
+	Dim full As B4XRect
 	full.Initialize(0, 0, PAGE_W, PAGE_H)
 	cvs.DrawRect(full, Colors.White, True, 0)
 	sheetY = MARGIN
 	If running = False Then Return cvs
-	Dim head As String = Ellipsize(cvs, "Sub plan · " & sheetTitle, Typeface.DEFAULT_BOLD, 18, ContentWidth)
-	DrawTopText(cvs, head, MARGIN, sheetY, Typeface.DEFAULT_BOLD, 18, INK, "LEFT")
-	sheetY = sheetY + TextHeight(cvs, Typeface.DEFAULT_BOLD, 18)
+	Dim head As String = Ellipsize(cvs, "Sub plan · " & sheetTitle, True, 18, ContentWidth)
+	DrawTopText(cvs, head, MARGIN, sheetY, True, 18, INK, "LEFT")
+	sheetY = sheetY + TextHeight(cvs, True, 18)
 	cvs.DrawLine(MARGIN, sheetY, PAGE_W - MARGIN, sheetY, RULE, 2)
 	sheetY = sheetY + 16
 	Return cvs
 End Sub
 
-Private Sub FinishCurrentPage(cvs As Canvas)
+Private Sub FinishCurrentPage(cvs As B4XCanvas)
 	DrawFooter(cvs)
-	Dim native As JavaObject = NativeBitmap(sheetBmp)
-	Dim builder As JavaObject
-	builder.InitializeNewInstance("android.graphics.pdf.PdfDocument$PageInfo$Builder", Array(PAGE_W, PAGE_H, sheetPage))
-	Dim info As Object = builder.RunMethod("create", Null)
-	Dim page As JavaObject = sheetPdf.RunMethod("startPage", Array(info))
-	Dim canvas As JavaObject = page.RunMethod("getCanvas", Null)
-	Dim sheet As JavaObject
-	sheet.InitializeStatic(Application.PackageName & ".modsubplanexport")
-	sheet.RunMethod("blit", Array(canvas, native))
-	sheetPdf.RunMethod("finishPage", Array(page))
+	Dim bmp As Bitmap = cvs.CreateBitmap
+	sheetPages.Add(bmp)
+	cvs.Release
+	sheetCvsReady = False
 End Sub
 
+#if B4A
 Private Sub EnsureViewSize(v As JavaObject, width As Int, height As Int)
 	If width < 2 Or height < 2 Then Return
 	Dim mode As Int = 1073741824
@@ -192,37 +180,38 @@ Private Sub EnsureViewSize(v As JavaObject, width As Int, height As Int)
 	Dim top As Int = v.RunMethod("getTop", Null)
 	v.RunMethod("layout", Array(left, top, left + width, top + height))
 End Sub
+#End If
 
-Private Sub StartNextPage(cvs As Canvas) As Canvas
+Private Sub StartNextPage(cvs As B4XCanvas) As B4XCanvas
 	FinishCurrentPage(cvs)
 	sheetPage = sheetPage + 1
 	Return BeginPage(True)
 End Sub
 
-Private Sub Ensure(cvs As Canvas, needed As Int) As Canvas
+Private Sub Ensure(cvs As B4XCanvas, needed As Int) As B4XCanvas
 	If sheetY + needed <= CONTENT_LIMIT Then Return cvs
 	If needed >= CONTENT_LIMIT - MARGIN Then Return cvs
 	Return StartNextPage(cvs)
 End Sub
 
-Private Sub DrawHeader(cvs As Canvas, match As Map, club As Map, plan As Map)
-	Dim title As String = Ellipsize(cvs, sheetTitle, Typeface.DEFAULT_BOLD, 36, ContentWidth)
-	DrawTopText(cvs, title, MARGIN, sheetY, Typeface.DEFAULT_BOLD, 36, INK, "LEFT")
-	sheetY = sheetY + TextHeight(cvs, Typeface.DEFAULT_BOLD, 36)
-	Dim lines As List = WrapText(cvs, MetaLine(match, club, plan), Typeface.DEFAULT, 18, ContentWidth)
+Private Sub DrawHeader(cvs As B4XCanvas, match As Map, club As Map, plan As Map)
+	Dim title As String = Ellipsize(cvs, sheetTitle, True, 36, ContentWidth)
+	DrawTopText(cvs, title, MARGIN, sheetY, True, 36, INK, "LEFT")
+	sheetY = sheetY + TextHeight(cvs, True, 36)
+	Dim lines As List = WrapText(cvs, MetaLine(match, club, plan), False, 18, ContentWidth)
 	Dim n As Int = lines.Size
 	If n > 3 Then n = 3
 	Dim i As Int
 	For i = 0 To n - 1
 		Dim line As String = lines.Get(i)
-		If i = 2 And lines.Size > 3 Then line = Ellipsize(cvs, line, Typeface.DEFAULT, 18, ContentWidth)
-		DrawTopText(cvs, line, MARGIN, sheetY, Typeface.DEFAULT, 18, MUTED, "LEFT")
-		sheetY = sheetY + TextHeight(cvs, Typeface.DEFAULT, 18) - 2
+		If i = 2 And lines.Size > 3 Then line = Ellipsize(cvs, line, False, 18, ContentWidth)
+		DrawTopText(cvs, line, MARGIN, sheetY, False, 18, MUTED, "LEFT")
+		sheetY = sheetY + TextHeight(cvs, False, 18) - 2
 	Next
 	sheetY = sheetY + 14
 End Sub
 
-Private Sub DrawGrid(cvs As Canvas, images As List, plan As Map, nameById As Map)
+Private Sub DrawGrid(cvs As B4XCanvas, images As List, plan As Map, nameById As Map)
 	Dim gap As Int = 28
 	Dim colW As Int = (PAGE_W - MARGIN * 2 - gap) / 2
 	Dim rightX As Int = MARGIN + colW + gap
@@ -231,9 +220,9 @@ Private Sub DrawGrid(cvs As Canvas, images As List, plan As Map, nameById As Map
 		Dim qA As Int = row * 2 + 1
 		Dim qB As Int = qA + 1
 		Dim topY As Int = sheetY
-		Dim titleH As Int = TextHeight(cvs, Typeface.DEFAULT_BOLD, 22)
-		DrawTopText(cvs, QuarterTitle(qA), MARGIN, topY, Typeface.DEFAULT_BOLD, 22, INK, "LEFT")
-		DrawTopText(cvs, QuarterTitle(qB), rightX, topY, Typeface.DEFAULT_BOLD, 22, INK, "LEFT")
+		Dim titleH As Int = TextHeight(cvs, True, 22)
+		DrawTopText(cvs, QuarterTitle(qA), MARGIN, topY, True, 22, INK, "LEFT")
+		DrawTopText(cvs, QuarterTitle(qB), rightX, topY, True, 22, INK, "LEFT")
 		Dim imgTop As Int = topY + titleH
 		Dim imgA As Bitmap = images.Get(qA - 1)
 		Dim imgB As Bitmap = images.Get(qB - 1)
@@ -246,7 +235,7 @@ Private Sub DrawGrid(cvs As Canvas, images As List, plan As Map, nameById As Map
 	Next
 End Sub
 
-Private Sub DrawPitchImage(cvs As Canvas, img As Bitmap, x As Int, y As Int, maxW As Int) As Int
+Private Sub DrawPitchImage(cvs As B4XCanvas, img As Bitmap, x As Int, y As Int, maxW As Int) As Int
 	If img.IsInitialized = False Then Return 0
 	Dim dw As Int = img.Width
 	Dim dh As Int = img.Height
@@ -260,17 +249,18 @@ Private Sub DrawPitchImage(cvs As Canvas, img As Bitmap, x As Int, y As Int, max
 		dh = 460
 	End If
 	Dim left As Int = x + (maxW - dw) / 2
-	Dim dest As Rect
+	Dim dest As B4XRect
 	dest.Initialize(left, y, left + dw, y + dh)
 	cvs.DrawRect(dest, GRASS, True, 0)
-	cvs.DrawBitmap(img, Null, dest)
+	Dim xb As B4XBitmap = img
+	cvs.DrawBitmap(xb, dest)
 	Return dh
 End Sub
 
-Private Sub DrawQuarterNotes(cvs As Canvas, plan As Map, nameById As Map, q As Int, x As Int, y As Int, maxW As Int) As Int
+Private Sub DrawQuarterNotes(cvs As B4XCanvas, plan As Map, nameById As Map, q As Int, x As Int, y As Int, maxW As Int) As Int
 	If q <= 1 Then Return y
-	DrawTopText(cvs, "After Q" & (q - 1), x, y, Typeface.DEFAULT_BOLD, 16, BREAK_COL, "LEFT")
-	y = y + TextHeight(cvs, Typeface.DEFAULT_BOLD, 16) - 2
+	DrawTopText(cvs, "After Q" & (q - 1), x, y, True, 16, BREAK_COL, "LEFT")
+	y = y + TextHeight(cvs, True, 16) - 2
 	Dim lines As List = BreakLines(plan, nameById, q - 1)
 	Dim limit As Int = lines.Size
 	Dim extra As Int = 0
@@ -283,37 +273,37 @@ Private Sub DrawQuarterNotes(cvs As Canvas, plan As Map, nameById As Map, q As I
 		Dim color As Int = INK
 		Dim line As String = lines.Get(i)
 		If line = "No changes" Then color = MUTED
-		line = Ellipsize(cvs, line, Typeface.DEFAULT, 16, maxW)
-		DrawTopText(cvs, line, x, y, Typeface.DEFAULT, 16, color, "LEFT")
-		y = y + TextHeight(cvs, Typeface.DEFAULT, 16) - 4
+		line = Ellipsize(cvs, line, False, 16, maxW)
+		DrawTopText(cvs, line, x, y, False, 16, color, "LEFT")
+		y = y + TextHeight(cvs, False, 16) - 4
 	Next
 	If extra > 0 Then
 		Dim more As String = "+" & extra & " more"
-		DrawTopText(cvs, more, x, y, Typeface.DEFAULT, 16, MUTED, "LEFT")
-		y = y + TextHeight(cvs, Typeface.DEFAULT, 16) - 4
+		DrawTopText(cvs, more, x, y, False, 16, MUTED, "LEFT")
+		y = y + TextHeight(cvs, False, 16) - 4
 	End If
 	Return y
 End Sub
 
-Private Sub DrawBench(cvs As Canvas, squad As List, byQ As Map, formation As String, nameById As Map) As Canvas
+Private Sub DrawBench(cvs As B4XCanvas, squad As List, byQ As Map, formation As String, nameById As Map) As B4XCanvas
 	cvs = Ensure(cvs, 72)
-	DrawTopText(cvs, "Bench", MARGIN, sheetY, Typeface.DEFAULT_BOLD, 22, INK, "LEFT")
-	sheetY = sheetY + TextHeight(cvs, Typeface.DEFAULT_BOLD, 22)
+	DrawTopText(cvs, "Bench", MARGIN, sheetY, True, 22, INK, "LEFT")
+	sheetY = sheetY + TextHeight(cvs, True, 22)
 	Dim text As String = BenchText(squad, byQ, formation, nameById)
-	Dim lines As List = WrapText(cvs, text, Typeface.DEFAULT, 18, ContentWidth)
+	Dim lines As List = WrapText(cvs, text, False, 18, ContentWidth)
 	If lines.Size = 0 Then lines.Add("None")
 	Dim i As Int
 	For i = 0 To lines.Size - 1
-		cvs = Ensure(cvs, TextHeight(cvs, Typeface.DEFAULT, 18))
+		cvs = Ensure(cvs, TextHeight(cvs, False, 18))
 		Dim benchLine As String = lines.Get(i)
-		DrawTopText(cvs, benchLine, MARGIN, sheetY, Typeface.DEFAULT, 18, INK, "LEFT")
-		sheetY = sheetY + TextHeight(cvs, Typeface.DEFAULT, 18) - 2
+		DrawTopText(cvs, benchLine, MARGIN, sheetY, False, 18, INK, "LEFT")
+		sheetY = sheetY + TextHeight(cvs, False, 18) - 2
 	Next
 	sheetY = sheetY + 16
 	Return cvs
 End Sub
 
-Private Sub DrawMinutes(cvs As Canvas, playerIds As List, nameById As Map, squadById As Map, plan As Map, projected As Map) As Canvas
+Private Sub DrawMinutes(cvs As B4XCanvas, playerIds As List, nameById As Map, squadById As Map, plan As Map, projected As Map) As B4XCanvas
 	If playerIds.Size = 0 Then Return cvs
 	cvs = Ensure(cvs, 88)
 	DrawMinutesHeader(cvs)
@@ -325,8 +315,8 @@ Private Sub DrawMinutes(cvs As Canvas, playerIds As List, nameById As Map, squad
 		If sheetY < before Then DrawMinutesHeader(cvs)
 		Dim pid As String = playerIds.Get(i)
 		Dim label As String = PlayerLabel(pid, nameById, squadById)
-		label = Ellipsize(cvs, label, Typeface.DEFAULT, 18, PAGE_W - MARGIN - 230)
-		DrawTopText(cvs, label, MARGIN, sheetY, Typeface.DEFAULT, 18, INK, "LEFT")
+		label = Ellipsize(cvs, label, False, 18, PAGE_W - MARGIN - 230)
+		DrawTopText(cvs, label, MARGIN, sheetY, False, 18, INK, "LEFT")
 		Dim tq As Int = modSubPlanner.TargetQuartersFor(targets, pid)
 		Dim mins As Int = 0
 		Try
@@ -334,43 +324,53 @@ Private Sub DrawMinutes(cvs As Canvas, playerIds As List, nameById As Map, squad
 		Catch
 			mins = 0
 		End Try
-		DrawTopText(cvs, tq & "Q", PAGE_W - MARGIN - 100, sheetY, Typeface.DEFAULT, 18, INK, "RIGHT")
-		DrawTopText(cvs, mins & "'", PAGE_W - MARGIN, sheetY, Typeface.DEFAULT, 18, INK, "RIGHT")
-		sheetY = sheetY + TextHeight(cvs, Typeface.DEFAULT, 18) - 2
+		DrawTopText(cvs, tq & "Q", PAGE_W - MARGIN - 100, sheetY, False, 18, INK, "RIGHT")
+		DrawTopText(cvs, mins & "'", PAGE_W - MARGIN, sheetY, False, 18, INK, "RIGHT")
+		sheetY = sheetY + TextHeight(cvs, False, 18) - 2
 		cvs.DrawLine(MARGIN, sheetY, PAGE_W - MARGIN, sheetY, RULE, 1)
 		sheetY = sheetY + 6
 	Next
 	Return cvs
 End Sub
 
-Private Sub DrawMinutesHeader(cvs As Canvas)
-	DrawTopText(cvs, "Playing time", MARGIN, sheetY, Typeface.DEFAULT_BOLD, 22, INK, "LEFT")
-	sheetY = sheetY + TextHeight(cvs, Typeface.DEFAULT_BOLD, 22)
-	DrawTopText(cvs, "Player", MARGIN, sheetY, Typeface.DEFAULT_BOLD, 14, MUTED, "LEFT")
-	DrawTopText(cvs, "Target", PAGE_W - MARGIN - 100, sheetY, Typeface.DEFAULT_BOLD, 14, MUTED, "RIGHT")
-	DrawTopText(cvs, "Plan", PAGE_W - MARGIN, sheetY, Typeface.DEFAULT_BOLD, 14, MUTED, "RIGHT")
-	sheetY = sheetY + TextHeight(cvs, Typeface.DEFAULT_BOLD, 14)
+Private Sub DrawMinutesHeader(cvs As B4XCanvas)
+	DrawTopText(cvs, "Playing time", MARGIN, sheetY, True, 22, INK, "LEFT")
+	sheetY = sheetY + TextHeight(cvs, True, 22)
+	DrawTopText(cvs, "Player", MARGIN, sheetY, True, 14, MUTED, "LEFT")
+	DrawTopText(cvs, "Target", PAGE_W - MARGIN - 100, sheetY, True, 14, MUTED, "RIGHT")
+	DrawTopText(cvs, "Plan", PAGE_W - MARGIN, sheetY, True, 14, MUTED, "RIGHT")
+	sheetY = sheetY + TextHeight(cvs, True, 14)
 	cvs.DrawLine(MARGIN, sheetY, PAGE_W - MARGIN, sheetY, RULE, 2)
 	sheetY = sheetY + 8
 End Sub
 
-Private Sub DrawFooter(cvs As Canvas)
-	DrawTopText(cvs, "TeamPulse sub plan · guide only", MARGIN, PAGE_H - 52, Typeface.DEFAULT, 14, MUTED, "LEFT")
+Private Sub DrawFooter(cvs As B4XCanvas)
+	DrawTopText(cvs, "TeamPulse sub plan · guide only", MARGIN, PAGE_H - 52, False, 14, MUTED, "LEFT")
 End Sub
 
-Private Sub DrawTopText(cvs As Canvas, text As String, x As Float, y As Float, tf As Typeface, px As Float, color As Int, align As String)
-	Dim size As Float = ScaledText(px)
-	Dim baseline As Float = y + cvs.MeasureStringHeight("Ag", tf, size)
-	cvs.DrawText(text, x, baseline, tf, size, color, align)
+Private Sub DrawTopText(cvs As B4XCanvas, text As String, x As Float, y As Float, bold As Boolean, px As Float, color As Int, align As String)
+	Dim fnt As B4XFont = SheetFont(bold, px)
+	Dim measured As B4XRect = cvs.MeasureText(text, fnt)
+	Dim baseline As Float = y + cvs.MeasureText("Ag", fnt).Height
+	Dim dx As Float = x
+	If align = "RIGHT" Then dx = x - measured.Width
+	If align = "CENTER" Then dx = x - measured.Width / 2
+	cvs.DrawText(text, dx, baseline, fnt, color, "LEFT")
 End Sub
 
-Private Sub TextHeight(cvs As Canvas, tf As Typeface, px As Float) As Int
-	Dim h As Float = cvs.MeasureStringHeight("Ag", tf, ScaledText(px))
+Private Sub TextHeight(cvs As B4XCanvas, bold As Boolean, px As Float) As Int
+	Dim h As Float = cvs.MeasureText("Ag", SheetFont(bold, px)).Height
 	Return h + 8
 End Sub
 
-Private Sub TextWidth(cvs As Canvas, text As String, tf As Typeface, px As Float) As Float
-	Return cvs.MeasureStringWidth(text, tf, ScaledText(px))
+Private Sub TextWidth(cvs As B4XCanvas, text As String, bold As Boolean, px As Float) As Float
+	Return cvs.MeasureText(text, SheetFont(bold, px)).Width
+End Sub
+
+Private Sub SheetFont(bold As Boolean, px As Float) As B4XFont
+	Dim size As Float = ScaledText(px)
+	If bold Then Return xui.CreateDefaultBoldFont(size)
+	Return xui.CreateDefaultFont(size)
 End Sub
 
 Private Sub ContentWidth As Float
@@ -383,33 +383,23 @@ Private Sub ScaledText(px As Float) As Float
 End Sub
 
 Private Sub InitScale
-	textScale = 1
-	Try
-		Dim jo As JavaObject
-		jo.InitializeContext
-		Dim res As JavaObject = jo.RunMethod("getResources", Null)
-		Dim metrics As JavaObject = res.RunMethod("getDisplayMetrics", Null)
-		textScale = metrics.GetField("scaledDensity")
-	Catch
-		Log("InitScale: " & LastException)
-		textScale = 1
-	End Try
+	textScale = modPlatform.TextScale
 	If textScale <= 0 Then textScale = 1
 End Sub
 
-Private Sub Ellipsize(cvs As Canvas, text As String, tf As Typeface, px As Float, maxW As Float) As String
+Private Sub Ellipsize(cvs As B4XCanvas, text As String, bold As Boolean, px As Float, maxW As Float) As String
 	If text = "" Then Return ""
-	If TextWidth(cvs, text, tf, px) <= maxW Then Return text
+	If TextWidth(cvs, text, bold, px) <= maxW Then Return text
 	Dim t As String = text
 	Do While t.Length > 1
 		t = t.SubString2(0, t.Length - 1)
 		Dim trial As String = t & "…"
-		If TextWidth(cvs, trial, tf, px) <= maxW Then Return trial
+		If TextWidth(cvs, trial, bold, px) <= maxW Then Return trial
 	Loop
 	Return "…"
 End Sub
 
-Private Sub WrapText(cvs As Canvas, text As String, tf As Typeface, px As Float, maxW As Float) As List
+Private Sub WrapText(cvs As B4XCanvas, text As String, bold As Boolean, px As Float, maxW As Float) As List
 	Dim lines As List
 	lines.Initialize
 	Dim trimmed As String = text.Trim
@@ -420,10 +410,10 @@ Private Sub WrapText(cvs As Canvas, text As String, tf As Typeface, px As Float,
 	For i = 0 To words.Length - 1
 		Dim word As String = words(i)
 		If word = "" Then Continue
-		If TextWidth(cvs, word, tf, px) > maxW Then word = Ellipsize(cvs, word, tf, px, maxW)
+		If TextWidth(cvs, word, bold, px) > maxW Then word = Ellipsize(cvs, word, bold, px, maxW)
 		Dim trial As String
 		If current = "" Then trial = word Else trial = current & " " & word
-		If TextWidth(cvs, trial, tf, px) <= maxW Then
+		If TextWidth(cvs, trial, bold, px) <= maxW Then
 			current = trial
 		Else
 			If current <> "" Then lines.Add(current)
@@ -434,26 +424,19 @@ Private Sub WrapText(cvs As Canvas, text As String, tf As Typeface, px As Float,
 	Return lines
 End Sub
 
-Private Sub NativeBitmap(bmp As Bitmap) As JavaObject
-	' Assigning a B4A Bitmap to JavaObject unwraps to android.graphics.Bitmap.
-	Dim native As JavaObject = bmp
-	Return native
-End Sub
-
 Private Sub ReleaseSheet
+	If sheetCvsReady = False Then Return
 	Try
-		Dim tiny As Bitmap
-		Dim one As Int = 1
-		tiny.InitializeMutable(one, one)
-		sheetBmp = tiny
+		sheetCvs.Release
 	Catch
 		Log("ReleaseSheet: " & LastException)
 	End Try
+	sheetCvsReady = False
 End Sub
 
 Private Sub PrepareDir As String
-	File.MakeDir(File.DirInternal, "shared")
-	Dim dir As String = File.Combine(File.DirInternal, "shared")
+	File.MakeDir(modPlatform.AppDir, "shared")
+	Dim dir As String = File.Combine(modPlatform.AppDir, "shared")
 	Dim existing As List = File.ListFiles(dir)
 	If existing.IsInitialized Then
 		Dim i As Int
@@ -463,6 +446,59 @@ Private Sub PrepareDir As String
 		Next
 	End If
 	Return dir
+End Sub
+
+Private Sub CommitPdf(path As String) As String
+#if B4A
+	Dim pdf As JavaObject
+	Try
+		pdf.InitializeNewInstance("android.graphics.pdf.PdfDocument", Null)
+		Dim i As Int
+		For i = 0 To sheetPages.Size - 1
+			Dim bmp As Bitmap = sheetPages.Get(i)
+			Dim builder As JavaObject
+			builder.InitializeNewInstance("android.graphics.pdf.PdfDocument$PageInfo$Builder", Array(PAGE_W, PAGE_H, i + 1))
+			Dim info As Object = builder.RunMethod("create", Null)
+			Dim page As JavaObject = pdf.RunMethod("startPage", Array(info))
+			Dim canvas As JavaObject = page.RunMethod("getCanvas", Null)
+			Dim sheet As JavaObject
+			sheet.InitializeStatic(Application.PackageName & ".modsubplanexport")
+			Dim native As JavaObject = bmp
+			sheet.RunMethod("blit", Array(canvas, native))
+			pdf.RunMethod("finishPage", Array(page))
+		Next
+		Dim fos As JavaObject
+		fos.InitializeNewInstance("java.io.FileOutputStream", Array(path))
+		pdf.RunMethod("writeTo", Array(fos))
+		fos.RunMethod("close", Null)
+		pdf.RunMethod("close", Null)
+		Return ""
+	Catch
+		Log("CommitPdf: " & LastException)
+		Try
+			If pdf.IsInitialized Then pdf.RunMethod("close", Null)
+		Catch
+			Log("CommitPdf close: " & LastException)
+		End Try
+		Return "Could not create the sub plan sheet. Nothing was changed."
+	End Try
+#else if B4i
+	Try
+		Dim no As NativeObject = Me
+		Dim started As String = no.RunMethod("beginPdf:width:height:", Array(path, PAGE_W, PAGE_H)).AsString
+		If started <> "" Then Return started
+		Dim i As Int
+		For i = 0 To sheetPages.Size - 1
+			Dim bmp As Bitmap = sheetPages.Get(i)
+			no.RunMethod("addPdfPage:width:height:", Array(bmp, PAGE_W, PAGE_H))
+		Next
+		no.RunMethod("endPdf", Null)
+		Return ""
+	Catch
+		Log("CommitPdf: " & LastException)
+		Return "Could not create the sub plan sheet. Nothing was changed."
+	End Try
+#End If
 End Sub
 
 Private Sub FileStamp As String
@@ -693,5 +729,22 @@ End Sub
 public static void blit(android.graphics.Canvas canvas, android.graphics.Bitmap bitmap) {
 	bitmap.setDensity(0);
 	canvas.drawBitmap(bitmap, 0f, 0f, null);
+}
+#End If
+
+#if OBJC
+- (NSString*)beginPdf:(NSString*)path width:(int)width height:(int)height {
+	CGRect pageRect = CGRectMake(0, 0, width, height);
+	BOOL ok = UIGraphicsBeginPDFContextToFile(path, pageRect, nil);
+	if (!ok) return @"Could not create the sub plan sheet. Nothing was changed.";
+	return @"";
+}
+- (void)addPdfPage:(UIImage*)img width:(int)width height:(int)height {
+	CGRect pageRect = CGRectMake(0, 0, width, height);
+	UIGraphicsBeginPDFPageWithInfo(pageRect, nil);
+	if (img != nil) [img drawInRect:pageRect];
+}
+- (void)endPdf {
+	UIGraphicsEndPDFContext();
 }
 #End If

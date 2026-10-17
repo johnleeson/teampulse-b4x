@@ -1,4 +1,5 @@
 ﻿B4A=true
+B4i=true
 Group=Default Group
 ModulesStructureVersion=1
 Type=Class
@@ -11,9 +12,21 @@ Sub Class_Globals
 	Private dialog As B4XDialog
 	Private sv As ScrollView
 	Private content As Panel
+#if B4A
 	Private edtTitle As EditText
+#else if B4i
+	Private edtTitle As TextField
+#End If
+#if B4A
 	Private edtLocation As EditText
+#else if B4i
+	Private edtLocation As TextField
+#End If
+#if B4A
 	Private edtOpponent As EditText
+#else if B4i
+	Private edtOpponent As TextField
+#End If
 	Private btnDate As Button
 	Private btnTime As Button
 	Private btnClub As Button
@@ -134,25 +147,25 @@ Private Sub LoadExistingMatch
 End Sub
 
 Private Sub BuildUI
-	Dim chrome As Map = modUI.AddPageChrome(Root, "Schedule match", "btnBack", "", "", True)
+	Dim chrome As Map = modUI.AddPageChrome(Me, Root, "Schedule match", "btnBack", "", "", True)
 	Dim top As Int = chrome.Get("ContentTop")
 	chromeTitle = chrome.Get("TitleLabel")
-	sv.Initialize(2000dip)
-	Root.AddView(sv, 0, top, Root.Width, Root.Height - top)
+	modUI.InitScroll(sv, 2000dip)
+	Root.AddView(sv, 0, top, modUI.ViewWidth(Root), modUI.ViewHeight(Root) - top)
 	content = sv.Panel
 	content.Color = modConfig.COLOR_DARK_BG
 	
 	Dim y As Int = 8dip
-	Dim w As Int = Root.Width - 32dip
+	Dim w As Int = modUI.ViewWidth(Root) - 32dip
 	
 	lblClub.Initialize("")
 	lblClub.Text = "CLUB"
-	lblClub.TextSize = 11
+	modUI.SetTextSize(lblClub, 11)
 	lblClub.TextColor = modConfig.COLOR_DARK_MUTED
-	lblClub.Typeface = Typeface.DEFAULT_BOLD
+	modUI.SetBold(lblClub, True)
 	content.AddView(lblClub, 16dip, y, w, 18dip)
 	y = y + 22dip
-	btnClub.Initialize("btnClub")
+	modUI.InitButton(Me, btnClub, "btnClub")
 	StylePickerButton(btnClub)
 	content.AddView(btnClub, 16dip, y, w, 48dip)
 	y = y + 56dip
@@ -163,9 +176,9 @@ Private Sub BuildUI
 	typeRow.Color = Colors.Transparent
 	content.AddView(typeRow, 16dip, y, w, 44dip)
 	Dim tw As Int = (w - 16dip) / 3
-	btnFriendly.Initialize("btnFriendly")
-	btnLeague.Initialize("btnLeague")
-	btnCup.Initialize("btnCup")
+	modUI.InitButton(Me, btnFriendly, "btnFriendly")
+	modUI.InitButton(Me, btnLeague, "btnLeague")
+	modUI.InitButton(Me, btnCup, "btnCup")
 	typeRow.AddView(btnFriendly, 0, 0, tw, 44dip)
 	typeRow.AddView(btnLeague, tw + 8dip, 0, tw, 44dip)
 	typeRow.AddView(btnCup, 2 * (tw + 8dip), 0, tw, 44dip)
@@ -177,8 +190,8 @@ Private Sub BuildUI
 	venueRow.Color = Colors.Transparent
 	content.AddView(venueRow, 16dip, y, w, 44dip)
 	Dim vw As Int = (w - 8dip) / 2
-	btnHome.Initialize("btnHome")
-	btnAway.Initialize("btnAway")
+	modUI.InitButton(Me, btnHome, "btnHome")
+	modUI.InitButton(Me, btnAway, "btnAway")
 	venueRow.AddView(btnHome, 0, 0, vw, 44dip)
 	venueRow.AddView(btnAway, vw + 8dip, 0, vw, 44dip)
 	y = y + 56dip
@@ -194,36 +207,36 @@ Private Sub BuildUI
 	y = y + 56dip
 	
 	y = AddFieldLabel(y, w, "DATE & KICK-OFF")
-	btnDate.Initialize("btnDate")
+	modUI.InitButton(Me, btnDate, "btnDate")
 	StylePickerButton(btnDate)
-	content.AddView(btnDate, 16dip, y, Root.Width / 2 - 20dip, 48dip)
-	btnTime.Initialize("btnTime")
+	content.AddView(btnDate, 16dip, y, modUI.ViewWidth(Root) / 2 - 20dip, 48dip)
+	modUI.InitButton(Me, btnTime, "btnTime")
 	StylePickerButton(btnTime)
-	content.AddView(btnTime, Root.Width / 2, y, Root.Width / 2 - 16dip, 48dip)
+	content.AddView(btnTime, modUI.ViewWidth(Root) / 2, y, modUI.ViewWidth(Root) / 2 - 16dip, 48dip)
 	y = y + 56dip
 	
 	y = AddFieldLabel(y, w, "LOCATION")
 	edtLocation.Initialize("")
 	modUI.StyleEditTextDark(edtLocation, "Ground / venue")
 	content.AddView(edtLocation, 16dip, y, w - 56dip, 48dip)
-	btnLocSuggest.Initialize("btnLocSuggest")
+	modUI.InitButton(Me, btnLocSuggest, "btnLocSuggest")
 	btnLocSuggest.Text = "▾"
-	btnLocSuggest.TextSize = 18
+	modUI.SetTextSize(btnLocSuggest, 18)
 	btnLocSuggest.Color = modConfig.COLOR_DARK_CARD
-	btnLocSuggest.TextColor = modConfig.COLOR_DARK_TEXT
-	content.AddView(btnLocSuggest, Root.Width - 64dip, y, 48dip, 48dip)
+	modUI.SetButtonTextColor(btnLocSuggest, modConfig.COLOR_DARK_TEXT)
+	content.AddView(btnLocSuggest, modUI.ViewWidth(Root) - 64dip, y, 48dip, 48dip)
 	y = y + 64dip
 	
-	btnCreate.Initialize("btnCreate")
+	modUI.InitButton(Me, btnCreate, "btnCreate")
 	btnCreate.Text = "Create match"
 	btnCreate.Color = modConfig.COLOR_ACCENT
-	btnCreate.TextColor = Colors.White
-	btnCreate.Typeface = Typeface.DEFAULT_BOLD
+	modUI.SetButtonTextColor(btnCreate, Colors.White)
+	modUI.SetBold(btnCreate, True)
 	content.AddView(btnCreate, 16dip, y, w, 52dip)
 	y = y + 72dip
 	
-	content.Height = Max(y, Root.Height)
-	sv.Panel.Height = content.Height
+	content.Height = Max(y, modUI.ViewHeight(Root))
+	modUI.SetScrollContentHeight(sv, content.Height)
 	
 	RefreshCompetitionButtons
 	RefreshVenueButtons
@@ -233,33 +246,35 @@ Private Sub AddFieldLabel(y As Int, w As Int, text As String) As Int
 	Dim lbl As Label
 	lbl.Initialize("")
 	lbl.Text = text
-	lbl.TextSize = 11
+	modUI.SetTextSize(lbl, 11)
 	lbl.TextColor = modConfig.COLOR_DARK_MUTED
-	lbl.Typeface = Typeface.DEFAULT_BOLD
+	modUI.SetBold(lbl, True)
 	content.AddView(lbl, 16dip, y, w, 18dip)
 	Return y + 22dip
 End Sub
 
 Private Sub StylePickerButton(b As Button)
 	b.Color = modConfig.COLOR_DARK_CARD
-	b.TextColor = modConfig.COLOR_DARK_TEXT
-	b.TextSize = 15
-	b.Gravity = Bit.Or(Gravity.CENTER_VERTICAL, Gravity.LEFT)
-	b.Typeface = Typeface.DEFAULT
+	modUI.SetButtonTextColor(b, modConfig.COLOR_DARK_TEXT)
+	modUI.SetTextSize(b, 15)
+	modUI.SetAlign(b, "CENTER", "LEFT")
+	modUI.SetBold(b, False)
+#if B4A
 	b.Padding = Array As Int(14dip, 0, 14dip, 0)
+#End If
 End Sub
 
 Private Sub StyleToggle(b As Button, selected As Boolean)
 	If selected Then
 		b.Color = modConfig.COLOR_ACCENT
-		b.TextColor = Colors.White
+		modUI.SetButtonTextColor(b, Colors.White)
 	Else
 		b.Color = modConfig.COLOR_DARK_CARD
-		b.TextColor = modConfig.COLOR_DARK_MUTED
+		modUI.SetButtonTextColor(b, modConfig.COLOR_DARK_MUTED)
 	End If
-	b.TextSize = 13
-	b.Typeface = Typeface.DEFAULT_BOLD
-	b.Gravity = Gravity.CENTER
+	modUI.SetTextSize(b, 13)
+	modUI.SetBold(b, True)
+	modUI.SetAlign(b, "CENTER", "CENTER")
 End Sub
 
 Private Sub RefreshCompetitionButtons
@@ -342,7 +357,7 @@ End Sub
 
 Private Sub btnClub_Click
 	If clubNames.Size = 0 Then
-		ToastMessageShow("Create or join a club first", False)
+		modPlatform.Toast("Create or join a club first", False)
 		Return
 	End If
 	StyleDarkDialog
@@ -455,7 +470,7 @@ End Sub
 Private Sub btnLocSuggest_Click
 	Dim hist As List = LocationHistory
 	If hist.Size = 0 Then
-		ToastMessageShow("No previous locations yet", False)
+		modPlatform.Toast("No previous locations yet", False)
 		Return
 	End If
 	StyleDarkDialog
@@ -503,17 +518,17 @@ Private Sub btnTime_Click
 	Dim lblH As Label
 	lblH.Initialize("")
 	lblH.Text = "Hour"
-	lblH.TextSize = 12
+	modUI.SetTextSize(lblH, 12)
 	lblH.TextColor = modConfig.COLOR_DARK_MUTED
-	lblH.Gravity = Gravity.CENTER
+	modUI.SetAlign(lblH, "CENTER", "CENTER")
 	pnl.AddView(lblH, 0, 4dip, 150dip, 20dip)
 	
 	Dim lblM As Label
 	lblM.Initialize("")
 	lblM.Text = "Minute"
-	lblM.TextSize = 12
+	modUI.SetTextSize(lblM, 12)
 	lblM.TextColor = modConfig.COLOR_DARK_MUTED
-	lblM.Gravity = Gravity.CENTER
+	modUI.SetAlign(lblM, "CENTER", "CENTER")
 	pnl.AddView(lblM, 150dip, 4dip, 150dip, 20dip)
 	
 	clvHour = modUI.AddCustomListViewThemed(pnl, 8dip, 28dip, 136dip, 260dip, Me, "clvHour", True)
@@ -558,10 +573,10 @@ Private Sub AddTimeRow(clv As CustomListView, text As String, value As Int, sele
 	Dim lbl As Label
 	lbl.Initialize("")
 	lbl.Text = text
-	lbl.TextSize = 18
+	modUI.SetTextSize(lbl, 18)
 	lbl.TextColor = Colors.White
-	lbl.Gravity = Gravity.CENTER
-	lbl.Typeface = Typeface.DEFAULT_BOLD
+	modUI.SetAlign(lbl, "CENTER", "CENTER")
+	modUI.SetBold(lbl, True)
 	p.AddView(lbl, 0, 0, p.Width, 44dip)
 	clv.Add(p, value)
 End Sub
@@ -578,7 +593,7 @@ End Sub
 
 Private Sub btnCreate_Click
 	If clubIds.Size = 0 Then
-		ToastMessageShow("Create or join a club first", False)
+		modPlatform.Toast("Create or join a club first", False)
 		Return
 	End If
 	Dim title As String = edtTitle.Text.Trim
@@ -596,7 +611,7 @@ Private Sub btnCreate_Click
 	If modAppState.EditingExistingMatch Then
 		Dim match As Map = modAppState.FindMatch(modAppState.SelectedMatchId)
 		If match.ContainsKey("id") = False Then
-			ToastMessageShow("Match not found", False)
+			modPlatform.Toast("Match not found", False)
 			Return
 		End If
 		match.Put("clubId", SelectedClubId)
@@ -610,7 +625,7 @@ Private Sub btnCreate_Click
 		modDb.SaveMatch(match)
 		modAppState.UpsertMatch(match)
 		modAppState.EditingExistingMatch = False
-		ToastMessageShow("Match updated", False)
+		modPlatform.Toast("Match updated", False)
 		B4XPages.ShowPage("MatchHub")
 		Return
 	End If
@@ -658,7 +673,7 @@ Private Sub btnCreate_Click
 	match.Put("subPlan", emptyM)
 	modDb.SaveMatch(match)
 	modAppState.UpsertMatch(match)
-	ToastMessageShow("Match created", False)
+	modPlatform.Toast("Match created", False)
 	B4XPages.ShowPage("Matches")
 End Sub
 

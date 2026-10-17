@@ -1,4 +1,5 @@
 ﻿B4A=true
+B4i=true
 Group=Default Group
 ModulesStructureVersion=1
 Type=StaticCode
@@ -18,7 +19,9 @@ Sub Process_Globals
 	' Access token expiry in DateTime ticks. 0 means refresh on the next call.
 	Public ExpiresAt As Long
 	Private Const SESSION_FILE As String = "supabase_session.json"
+#if B4A
 	Private StrictModeReady As Boolean
+#End If
 End Sub
 
 Public Sub Initialize
@@ -47,6 +50,7 @@ End Sub
 
 ' Avoid NetworkOnMainThreadException for sync Rest* callers (saves, polls).
 Private Sub AllowNetworkOnMainThread
+#if B4A
 	If StrictModeReady Then Return
 	Try
 		Dim builder As JavaObject
@@ -59,6 +63,7 @@ Private Sub AllowNetworkOnMainThread
 	Catch
 		Log("StrictMode: " & LastException.Message)
 	End Try
+#End If
 End Sub
 
 Public Sub IsLoggedIn As Boolean
@@ -73,8 +78,8 @@ Public Sub SignOut
 	DisplayName = ""
 	ExpiresAt = 0
 	Try
-		If File.Exists(File.DirInternal, SESSION_FILE) Then
-			File.Delete(File.DirInternal, SESSION_FILE)
+		If File.Exists(modPlatform.AppDir, SESSION_FILE) Then
+			File.Delete(modPlatform.AppDir, SESSION_FILE)
 		End If
 	Catch
 		Log(LastException.Message)
@@ -94,7 +99,7 @@ Private Sub SaveSession
 		m.Put("expires_at", ExpiresAt)
 		Dim jg As JSONGenerator
 		jg.Initialize(m)
-		File.WriteString(File.DirInternal, SESSION_FILE, jg.ToString)
+		File.WriteString(modPlatform.AppDir, SESSION_FILE, jg.ToString)
 	Catch
 		Log("SaveSession: " & LastException.Message)
 	End Try
@@ -102,8 +107,8 @@ End Sub
 
 Private Sub LoadSession
 	Try
-		If File.Exists(File.DirInternal, SESSION_FILE) = False Then Return
-		Dim raw As String = File.ReadString(File.DirInternal, SESSION_FILE)
+		If File.Exists(modPlatform.AppDir, SESSION_FILE) = False Then Return
+		Dim raw As String = File.ReadString(modPlatform.AppDir, SESSION_FILE)
 		If raw.Length = 0 Then Return
 		Dim jp As JSONParser
 		jp.Initialize(raw)
@@ -194,9 +199,7 @@ End Sub
 
 Public Sub RestPatch(tableAndQuery As String, body As Map, prefer As String) As Object
 	Dim url As String = modConfig.SUPABASE_URL & "/rest/v1/" & tableAndQuery
-	Dim jg As JSONGenerator
-	jg.Initialize(body)
-	Return RequestRaw("PATCH", url, jg.ToString, True, prefer)
+	Return RequestRaw("PATCH", url, ObjectToJson(body), True, prefer)
 End Sub
 
 Public Sub RestDelete(tableAndQuery As String) As Object
@@ -206,27 +209,15 @@ End Sub
 
 Public Sub Rpc(fnName As String, args As Map) As Object
 	Dim url As String = modConfig.SUPABASE_URL & "/rest/v1/rpc/" & fnName
-	Dim jg As JSONGenerator
-	jg.Initialize(args)
-	Return RequestRaw("POST", url, jg.ToString, True, "return=representation")
+	Return RequestRaw("POST", url, ObjectToJson(args), True, "return=representation")
 End Sub
 
 Private Sub ObjectToJson(body As Object) As String
-	Dim jg As JSONGenerator
-	If body Is List Then
-		Dim lst As List = body
-		jg.Initialize2(lst)
-	Else
-		Dim mp As Map = body
-		jg.Initialize(mp)
-	End If
-	Return jg.ToString
+	Return modPlatform.JsonString(body)
 End Sub
 
 Private Sub Request(method As String, url As String, bodyMap As Map, useUserToken As Boolean, prefer As String) As Map
-	Dim jg As JSONGenerator
-	jg.Initialize(bodyMap)
-	Dim raw As Object = RequestRaw(method, url, jg.ToString, useUserToken, prefer)
+	Dim raw As Object = RequestRaw(method, url, ObjectToJson(bodyMap), useUserToken, prefer)
 	If raw Is Map Then
 		Dim m As Map = raw
 		Return m
@@ -263,7 +254,6 @@ Private Sub HttpOnce(method As String, url As String, body As String, useUserTok
 	LastError = ""
 	Dim empty As Map
 	empty.Initialize
-	Dim joNull As Object = Null
 	If useUserToken And allowRefresh Then
 		Dim tokenState As String = EnsureFreshToken
 		If tokenState = "rejected" Then
@@ -272,42 +262,13 @@ Private Sub HttpOnce(method As String, url As String, body As String, useUserTok
 		End If
 	End If
 	Try
-		Dim jurl As JavaObject
-		jurl.InitializeNewInstance("java.net.URL", Array(url))
-		Dim conn As JavaObject = jurl.RunMethod("openConnection", Null)
-		conn.RunMethod("setRequestMethod", Array(method))
-		conn.RunMethod("setConnectTimeout", Array(10000))
-		conn.RunMethod("setReadTimeout", Array(20000))
-		conn.RunMethod("setRequestProperty", Array("apikey", modConfig.SUPABASE_ANON_KEY))
-		Dim bearer As String = modConfig.SUPABASE_ANON_KEY
-		If useUserToken And AccessToken <> "" Then bearer = AccessToken
-		conn.RunMethod("setRequestProperty", Array("Authorization", "Bearer " & bearer))
-		conn.RunMethod("setRequestProperty", Array("Content-Type", "application/json"))
-		conn.RunMethod("setRequestProperty", Array("Accept", "application/json"))
-		If prefer <> "" Then
-			conn.RunMethod("setRequestProperty", Array("Prefer", prefer))
-		End If
-		
-		If method <> "GET" And method <> "DELETE" And body <> "" Then
-			conn.RunMethod("setDoOutput", Array(True))
-			Dim os As JavaObject = conn.RunMethod("getOutputStream", Null)
-			Dim bytes() As Byte = body.GetBytes("UTF8")
-			os.RunMethod("write", Array(bytes, 0, bytes.Length))
-			os.RunMethod("flush", Null)
-			os.RunMethod("close", Null)
-		End If
-		
-		Dim code As Int = conn.RunMethod("getResponseCode", Null)
-		Dim streamObj As Object
-		If code >= 200 And code < 300 Then
-			streamObj = conn.RunMethod("getInputStream", Null)
-		Else
-			streamObj = conn.RunMethod("getErrorStream", Null)
-		End If
-		
-		Dim text As String = ""
-		If streamObj <> Null And streamObj <> joNull Then
-			text = ReadStreamToString(streamObj)
+		Dim raw As Map = RawHttp(method, url, body, useUserToken, prefer)
+		Dim code As Int = raw.GetDefault("status", -1)
+		Dim text As String = "" & raw.GetDefault("body", "")
+		If code < 0 Then
+			LastError = "" & raw.GetDefault("error", "Request failed")
+			Log("DoHttp " & method & " " & url & ": " & LastError)
+			Return empty
 		End If
 		
 		If code = 401 And useUserToken And allowRefresh Then
@@ -330,6 +291,8 @@ Private Sub HttpOnce(method As String, url As String, body As String, useUserTok
 	End Try
 End Sub
 
+' TextReader is B4A. The iOS request path does not use this.
+#if B4A
 Private Sub ReadStreamToString(streamObj As Object) As String
 	Try
 		Dim tr As TextReader
@@ -342,6 +305,7 @@ Private Sub ReadStreamToString(streamObj As Object) As String
 		Return ""
 	End Try
 End Sub
+#End If
 
 Private Sub AsLong(v As Object) As Long
 	If v = Null Then Return 0
@@ -359,11 +323,151 @@ Private Sub AsLong(v As Object) As Long
 End Sub
 
 Public Sub UrlEncode(s As String) As String
-	Try
-		Dim enc As JavaObject
-		enc.InitializeStatic("java.net.URLEncoder")
-		Return enc.RunMethod("encode", Array(s, "UTF-8"))
-	Catch
-		Return s
-	End Try
+	Return modPlatform.UrlEncode(s)
 End Sub
+
+' status, body, error. status -1 means the request did not complete.
+Private Sub RawHttp(method As String, url As String, body As String, useUserToken As Boolean, prefer As String) As Map
+	Dim result As Map
+	result.Initialize
+	result.Put("status", -1)
+	result.Put("body", "")
+	result.Put("error", "")
+#if B4A
+	Dim joNull As Object = Null
+	Try
+		Dim jurl As JavaObject
+		jurl.InitializeNewInstance("java.net.URL", Array(url))
+		Dim conn As JavaObject = jurl.RunMethod("openConnection", Null)
+		conn.RunMethod("setRequestMethod", Array(method))
+		conn.RunMethod("setConnectTimeout", Array(10000))
+		conn.RunMethod("setReadTimeout", Array(20000))
+		conn.RunMethod("setRequestProperty", Array("apikey", modConfig.SUPABASE_ANON_KEY))
+		Dim bearer As String = modConfig.SUPABASE_ANON_KEY
+		If useUserToken And AccessToken <> "" Then bearer = AccessToken
+		conn.RunMethod("setRequestProperty", Array("Authorization", "Bearer " & bearer))
+		conn.RunMethod("setRequestProperty", Array("Content-Type", "application/json"))
+		conn.RunMethod("setRequestProperty", Array("Accept", "application/json"))
+		If prefer <> "" Then
+			conn.RunMethod("setRequestProperty", Array("Prefer", prefer))
+		End If
+		If method <> "GET" And method <> "DELETE" And body <> "" Then
+			conn.RunMethod("setDoOutput", Array(True))
+			Dim os As JavaObject = conn.RunMethod("getOutputStream", Null)
+			Dim bytes() As Byte = body.GetBytes("UTF8")
+			os.RunMethod("write", Array(bytes, 0, bytes.Length))
+			os.RunMethod("flush", Null)
+			os.RunMethod("close", Null)
+		End If
+		Dim code As Int = conn.RunMethod("getResponseCode", Null)
+		Dim streamObj As Object
+		If code >= 200 And code < 300 Then
+			streamObj = conn.RunMethod("getInputStream", Null)
+		Else
+			streamObj = conn.RunMethod("getErrorStream", Null)
+		End If
+		Dim text As String = ""
+		If streamObj <> Null And streamObj <> joNull Then
+			text = ReadStreamToString(streamObj)
+		End If
+		result.Put("status", code)
+		result.Put("body", text)
+		Return result
+	Catch
+		result.Put("error", LastException.Message)
+		Return result
+	End Try
+#else if B4i
+	Try
+		Dim headers As Map
+		headers.Initialize
+		headers.Put("apikey", modConfig.SUPABASE_ANON_KEY)
+		Dim bearer As String = modConfig.SUPABASE_ANON_KEY
+		If useUserToken And AccessToken <> "" Then bearer = AccessToken
+		headers.Put("Authorization", "Bearer " & bearer)
+		headers.Put("Content-Type", "application/json")
+		headers.Put("Accept", "application/json")
+		If prefer <> "" Then headers.Put("Prefer", prefer)
+		' B4i Map is not an NSDictionary. ToDictionary is the native one the request can read.
+		Dim no As NativeObject = Me
+		Dim got As Object = no.RunMethod("tpSyncHttp:method:body:headers:timeout:", Array(url, method, body, headers.ToDictionary, 20000))
+		' The native method returns JSON text. A returned NSDictionary is not a B4X Map.
+		Dim payload As String = ""
+		If got <> Null Then payload = "" & got
+		If payload <> "" Then
+			Dim jp As JSONParser
+			jp.Initialize(payload)
+			Dim parsed As Map = jp.NextObject
+			Return parsed
+		End If
+		result.Put("error", "Request failed")
+		Return result
+	Catch
+		result.Put("error", LastException.Message)
+		Return result
+	End Try
+#End If
+End Sub
+
+#if OBJC
+- (NSString*)tpJson:(NSDictionary*)out {
+	NSData *json = [NSJSONSerialization dataWithJSONObject:out options:0 error:nil];
+	if (json == nil) return @"{\"status\":-1,\"body\":\"\",\"error\":\"Encode failed\"}";
+	NSString *text = [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
+	if (text == nil) return @"{\"status\":-1,\"body\":\"\",\"error\":\"Encode failed\"}";
+	return text;
+}
+- (NSString*)tpSyncHttp:(NSString*)url method:(NSString*)method body:(NSString*)body headers:(NSDictionary*)headers timeout:(int)timeoutMs {
+	NSMutableDictionary *out = [NSMutableDictionary dictionary];
+	out[@"status"] = @(-1);
+	out[@"body"] = @"";
+	out[@"error"] = @"Request failed";
+	NSURL *nsurl = [NSURL URLWithString:url];
+	if (nsurl == nil) {
+		out[@"error"] = @"Bad URL";
+		return [self tpJson:out];
+	}
+	NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:nsurl];
+	req.HTTPMethod = method;
+	req.timeoutInterval = MAX(1, timeoutMs) / 1000.0;
+	if (body != nil && body.length > 0 && ![method isEqualToString:@"GET"] && ![method isEqualToString:@"DELETE"]) {
+		req.HTTPBody = [body dataUsingEncoding:NSUTF8StringEncoding];
+	}
+	for (NSString *key in headers) {
+		id value = headers[key];
+		if (value != nil) [req setValue:[value description] forHTTPHeaderField:key];
+	}
+	__block NSData *data = nil;
+	__block NSHTTPURLResponse *resp = nil;
+	__block NSError *err = nil;
+	dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+	NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithRequest:req completionHandler:^(NSData *d, NSURLResponse *r, NSError *e) {
+		data = d;
+		if ([r isKindOfClass:[NSHTTPURLResponse class]]) resp = (NSHTTPURLResponse*)r;
+		err = e;
+		dispatch_semaphore_signal(sem);
+	}];
+	[task resume];
+	int64_t waitNs = (int64_t)(timeoutMs + 2000) * (int64_t)NSEC_PER_MSEC;
+	long waited = dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, waitNs));
+	if (waited != 0) {
+		[task cancel];
+		out[@"error"] = @"Request timed out";
+		return [self tpJson:out];
+	}
+	if (err != nil && resp == nil) {
+		out[@"error"] = err.localizedDescription != nil ? err.localizedDescription : @"Request failed";
+		return [self tpJson:out];
+	}
+	NSInteger code = resp != nil ? resp.statusCode : -1;
+	out[@"status"] = @(code);
+	NSString *text = @"";
+	if (data != nil) {
+		text = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+		if (text == nil) text = @"";
+	}
+	out[@"body"] = text;
+	out[@"error"] = @"";
+	return [self tpJson:out];
+}
+#End If

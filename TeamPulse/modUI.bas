@@ -1,4 +1,5 @@
 ﻿B4A=true
+B4i=true
 Group=Default Group
 ModulesStructureVersion=1
 Type=StaticCode
@@ -7,6 +8,19 @@ Version=12.80
 ' Shared UI helpers — CLV creation + match/hub cards (programmatic, no Designer).
 
 Sub Process_Globals
+	Private xui As XUI
+#if B4i
+	' Class instances, not Panels. A code module cannot store an activity view.
+	Private lastPress As clsLongPress
+	Private longKeepers As List
+	' Maps of callback, event name, and button. Click is raised in this module.
+	' Object, not Button: a code module must not construct a view at startup.
+	Private buttonRelays As List
+	Private lastClicked As Object
+	Private panelRelays As List
+	Private clickTarget As Object
+	Private lastClickedPanel As Object
+#End If
 End Sub
 
 Public Sub MatchCardHeight As Int
@@ -98,28 +112,422 @@ Public Sub ApplyDarkListBackground(clv As CustomListView, bg As Int)
 	End Try
 End Sub
 
-Public Sub StyleEditText(edt As EditText, hint As String)
-	edt.Hint = hint
-	edt.Color = modConfig.COLOR_CARD
-	edt.TextColor = modConfig.COLOR_PRIMARY
-	edt.HintColor = modConfig.COLOR_MUTED
-	edt.TextSize = 15
-	edt.SingleLine = True
+' B4A Button.Initialize takes an event name. B4i needs a custom button so Color and text color apply.
+' callback is the page that owns EventName_Click. Android ignores it and keeps the existing Initialize.
+Public Sub InitButton(callback As Object, b As Button, eventName As String)
+#if B4A
+	If callback <> Null Then b.Initialize(eventName)
+#else if B4i
+	If buttonRelays.IsInitialized = False Then buttonRelays.Initialize
+	b.InitializeCustom("tpRelay", xui.Color_White, xui.Color_LightGray)
+	Dim info As Map
+	info.Initialize
+	info.Put("callback", callback)
+	info.Put("event", eventName)
+	info.Put("btn", b)
+	buttonRelays.Add(info)
+#End If
 End Sub
 
-Public Sub StyleEditTextDark(edt As EditText, hint As String)
-	edt.Hint = hint
-	edt.Color = modConfig.COLOR_DARK_CARD
-	edt.TextColor = modConfig.COLOR_DARK_TEXT
-	edt.HintColor = modConfig.COLOR_DARK_MUTED
-	edt.TextSize = 15
-	edt.SingleLine = True
+#if B4i
+Private Sub tpRelay_Click
+	Dim clicked As Button = Sender
+	lastClicked = clicked
+	Dim i As Int
+	For i = buttonRelays.Size - 1 To 0 Step -1
+		Dim info As Map = buttonRelays.Get(i)
+		Dim stored As Button = info.Get("btn")
+		If SameView(stored, clicked) Then
+			Dim cb As Object = info.Get("callback")
+			Dim ev As String = info.Get("event")
+			If cb <> Null And ev <> "" Then CallSub(cb, ev & "_Click")
+			Return
+		End If
+	Next
+End Sub
+#End If
+
+' Android Click passes the button as Sender. iOS buttons created in modUI do not.
+Public Sub ClickedButton(senderObj As Object) As Button
+#if B4i
+	If senderObj Is Button Then
+		Dim direct As Button = senderObj
+		Return direct
+	End If
+	Dim saved As Button = lastClicked
+	Return saved
+#else
+	Dim b As Button = senderObj
+	Return b
+#End If
 End Sub
 
-Public Sub RoundedBg(color As Int, radius As Int) As ColorDrawable
-	Dim cd As ColorDrawable
-	cd.Initialize(color, radius)
-	Return cd
+' iOS panels created in this module raise Click here. Android still initializes them on the page.
+Public Sub SetClickTarget(target As Object)
+#if B4i
+	clickTarget = target
+#else
+	If target = Null Then Return
+#End If
+End Sub
+
+Public Sub ClickedPanel(senderObj As Object) As Panel
+#if B4i
+	If senderObj Is Panel Then
+		Dim direct As Panel = senderObj
+		Return direct
+	End If
+	Dim saved As Panel = lastClickedPanel
+	Return saved
+#else
+	Dim p As Panel = senderObj
+	Return p
+#End If
+End Sub
+
+Private Sub WirePanel(p As Panel, EventName As String, callback As Object)
+#if B4A
+	If callback = Null And EventName = "" Then
+		p.Initialize("")
+	Else
+		p.Initialize(EventName)
+	End If
+#else if B4i
+	If EventName = "" Then
+		p.Initialize("")
+		Return
+	End If
+	Dim target As Object = callback
+	If target = Null Then target = clickTarget
+	If panelRelays.IsInitialized = False Then panelRelays.Initialize
+	p.Initialize("tpPanel")
+	Dim info As Map
+	info.Initialize
+	info.Put("callback", target)
+	info.Put("event", EventName)
+	info.Put("pnl", p)
+	panelRelays.Add(info)
+#End If
+End Sub
+
+#if B4i
+Private Sub tpPanel_Click
+	Dim clicked As Panel = Sender
+	lastClickedPanel = clicked
+	If panelRelays.IsInitialized = False Then Return
+	Dim i As Int
+	For i = panelRelays.Size - 1 To 0 Step -1
+		Dim info As Map = panelRelays.Get(i)
+		If SameView(info.Get("pnl"), clicked) Then
+			Dim cb As Object = info.Get("callback")
+			Dim ev As String = info.Get("event")
+			If cb <> Null And ev <> "" Then CallSub(cb, ev & "_Click")
+			Return
+		End If
+	Next
+End Sub
+
+Private Sub SameView(a As Object, b As Object) As Boolean
+	If a = Null Or b = Null Then Return False
+	If a = b Then Return True
+	Try
+		Dim na As NativeObject = a
+		Dim same As Object = na.RunMethod("isEqual:", Array(b))
+		Return same = True
+	Catch
+		Return False
+	End Try
+End Sub
+#End If
+
+Public Sub SetButtonTextColor(b As Button, color As Int)
+#if B4A
+	b.TextColor = color
+#else if B4i
+	b.CustomLabel.TextColor = color
+#End If
+End Sub
+
+' B4A ScrollView.Initialize takes the inner height. B4i also takes the event name and width.
+Public Sub InitScroll(sv As ScrollView, innerHeight As Int)
+#if B4A
+	sv.Initialize(innerHeight)
+#else if B4i
+	Dim w As Int = 100%x
+	Dim lv As LayoutValues = GetDeviceLayoutValues
+	If lv.Width > w Then w = lv.Width
+	If w < 80dip Then w = 320dip
+	sv.Initialize("", w, innerHeight)
+#End If
+End Sub
+
+Public Sub SetScrollContentHeight(sv As ScrollView, height As Int)
+#if B4A
+	sv.Panel.Height = height
+#else if B4i
+	sv.ContentHeight = height
+#End If
+End Sub
+
+Public Sub RoundView(v As Object, color As Int, radius As Int)
+	Dim x As B4XView = v
+	x.SetColorAndBorder(color, 0, 0, radius)
+End Sub
+
+' B4A Panel.SetLayout does not exist on B4i. Assign the frame directly on both.
+Public Sub PlaceView(v As Object, left As Int, top As Int, width As Int, height As Int)
+	Dim xv As B4XView = v
+	xv.Left = left
+	xv.Top = top
+	xv.Width = width
+	xv.Height = height
+End Sub
+
+' Root.Width is a sliver while an iOS page is created. Width can follow the phone.
+' Height stays shorter than the full screen so the bottom bar is not pushed off.
+Public Sub ViewWidth(v As B4XView) As Int
+	Dim w As Int = 0
+	If v.IsInitialized Then w = v.Width
+#if B4i
+	Dim screenW As Int = DeviceWidth
+	If w < screenW * 0.8 Then w = screenW
+#End If
+	If w < 80dip Then w = 320dip
+	Return w
+End Sub
+
+Public Sub ViewHeight(v As B4XView) As Int
+	Dim h As Int = 0
+	If v.IsInitialized Then h = v.Height
+#if B4i
+	Dim screenH As Int = DeviceHeight
+	If h < screenH * 0.7 Then h = PageHeight
+#End If
+	If h < 80dip Then h = 568dip
+	Return h
+End Sub
+
+' Gives a page root a real size before it lays out. Android already has one.
+Public Sub ExpandRoot(Root As B4XView)
+#if B4i
+	Dim w As Int = DeviceWidth
+	Dim h As Int = PageHeight
+	If Root.Width < w * 0.8 Then Root.Width = w
+	If Root.Height < DeviceHeight * 0.7 Then Root.Height = h
+#Else
+	If Root.IsInitialized = False Then Return
+#End If
+End Sub
+
+#if B4i
+Private Sub DeviceWidth As Int
+	Dim w As Int = 100%x
+	Dim lv As LayoutValues = GetDeviceLayoutValues
+	If lv.Width > w Then w = lv.Width
+	If w < 80dip Then w = 320dip
+	Return w
+End Sub
+
+Private Sub DeviceHeight As Int
+	Dim h As Int = 100%y
+	Dim lv As LayoutValues = GetDeviceLayoutValues
+	If lv.Height > h Then h = lv.Height
+	If h < 80dip Then h = 568dip
+	Return h
+End Sub
+
+' Full screen height includes the status bar and home indicator.
+Private Sub PageHeight As Int
+	Dim h As Int = DeviceHeight
+	If h > 160dip Then h = h - 96dip
+	Return h
+End Sub
+#End If
+
+Public Sub RoundBorder(v As Object, fill As Int, radius As Int, borderWidth As Int, borderColor As Int)
+	Dim x As B4XView = v
+	x.SetColorAndBorder(fill, borderWidth, borderColor, radius)
+End Sub
+
+Public Sub StyleEditText(edt As Object, hint As String)
+	StyleFieldColors(edt, hint, modConfig.COLOR_CARD, modConfig.COLOR_PRIMARY, modConfig.COLOR_MUTED, 15, True)
+End Sub
+
+Public Sub StyleEditTextDark(edt As Object, hint As String)
+	StyleFieldColors(edt, hint, modConfig.COLOR_DARK_CARD, modConfig.COLOR_DARK_TEXT, modConfig.COLOR_DARK_MUTED, 15, True)
+End Sub
+
+Public Sub StyleFieldColors(edt As Object, hint As String, bg As Int, fg As Int, hintColor As Int, size As Float, single As Boolean)
+#if B4A
+	Dim e As EditText = edt
+	e.Hint = hint
+	e.Color = bg
+	e.TextColor = fg
+	e.HintColor = hintColor
+#else if B4i
+	If edt Is TextView Then
+		Dim tv As TextView = edt
+		tv.Color = bg
+		tv.TextColor = fg
+	Else
+		Dim t As TextField = edt
+		t.HintText = hint
+		t.Color = bg
+		t.TextColor = fg
+		Dim hintText As AttributedString
+		hintText.Initialize(hint, xui.CreateDefaultFont(size), hintColor)
+		Dim no As NativeObject = t
+		no.RunMethod("setAttributedPlaceholder:", Array(hintText))
+	End If
+#End If
+	SetTextSize(edt, size)
+	SetSingleLine(edt, single)
+End Sub
+
+Public Sub SetTextSize(v As Object, size As Float)
+	Dim x As B4XView = v
+	x.TextSize = size
+	x.Font = xui.CreateDefaultFont(size)
+End Sub
+
+Public Sub SetBold(v As Object, bold As Boolean)
+	Dim x As B4XView = v
+	Dim size As Float = x.TextSize
+	If size < 1 Then size = 15
+	If bold Then
+		x.Font = xui.CreateDefaultBoldFont(size)
+	Else
+		x.Font = xui.CreateDefaultFont(size)
+	End If
+End Sub
+
+Public Sub SetAlign(v As Object, vertical As String, horizontal As String)
+#if B4i
+	' UIButton has no setTextAlignment. Custom buttons draw their title on CustomLabel.
+	If v Is Button Then
+		Dim b As Button = v
+		If horizontal = "RIGHT" Then
+			b.CustomLabel.TextAlignment = b.CustomLabel.ALIGNMENT_RIGHT
+		Else If horizontal = "LEFT" Then
+			b.CustomLabel.TextAlignment = b.CustomLabel.ALIGNMENT_LEFT
+		Else
+			b.CustomLabel.TextAlignment = b.CustomLabel.ALIGNMENT_CENTER
+		End If
+		Return
+	End If
+#End If
+	Dim x As B4XView = v
+	x.SetTextAlignment(vertical, horizontal)
+End Sub
+
+Public Sub SetSingleLine(v As Object, single As Boolean)
+#if B4A
+	If v Is Label Then
+		Dim lbl As Label = v
+		lbl.SingleLine = single
+	Else If v Is Button Then
+		Dim b As Button = v
+		b.SingleLine = single
+	Else If v Is EditText Then
+		Dim e As EditText = v
+		e.SingleLine = single
+	End If
+#else if B4i
+	If v Is Label Then
+		Dim lbl As Label = v
+		lbl.Multiline = Not(single)
+	End If
+#End If
+End Sub
+
+Public Sub SetKeyboard(v As Object, kind As String)
+#if B4A
+	Dim e As EditText = v
+	If kind = "numbers" Then
+		e.InputType = e.INPUT_TYPE_NUMBERS
+	Else If kind = "decimal" Then
+		e.InputType = e.INPUT_TYPE_DECIMAL_NUMBERS
+	Else If kind = "phone" Then
+		e.InputType = e.INPUT_TYPE_PHONE
+	Else
+		e.InputType = e.INPUT_TYPE_TEXT
+	End If
+#else if B4i
+	If v Is TextField Then
+		Dim tf As TextField = v
+		If kind = "numbers" Then
+			tf.KeyboardType = tf.TYPE_NUMBER_PAD
+		Else If kind = "decimal" Then
+			tf.KeyboardType = tf.TYPE_DECIMAL_PAD
+		Else If kind = "phone" Then
+			tf.KeyboardType = tf.TYPE_PHONE_PAD
+		Else If kind = "email" Then
+			tf.KeyboardType = tf.TYPE_EMAIL_ADDRESS
+		Else
+			tf.KeyboardType = tf.TYPE_DEFAULT
+		End If
+	End If
+#End If
+End Sub
+
+Public Sub SetPassword(v As Object, password As Boolean)
+#if B4A
+	Dim e As EditText = v
+	e.PasswordMode = password
+#else if B4i
+	Dim tf As TextField = v
+	tf.PasswordMode = password
+#End If
+End Sub
+
+Public Sub SetImageFill(iv As ImageView)
+#if B4A
+	iv.Gravity = Gravity.FILL
+#else if B4i
+	iv.ContentMode = iv.MODE_FILL
+#End If
+End Sub
+
+Public Sub EnableLongClick(pnl As Panel, callback As Object, eventName As String)
+	If eventName = "" Or callback = Null Then Return
+#if B4A
+	Try
+		Dim hjo As JavaObject = pnl
+		hjo.RunMethod("setLongClickable", Array(True))
+		Dim hook As JavaObject
+		hook.InitializeStatic(Application.PackageName & ".modui")
+		hook.RunMethod("holdForLongPress", Array(hjo))
+	Catch
+		Log("EnableLongClick: " & LastException.Message)
+	End Try
+#else if B4i
+	If longKeepers.IsInitialized = False Then longKeepers.Initialize
+	Dim lp As clsLongPress
+	lp.Initialize(pnl, callback, eventName)
+	longKeepers.Add(lp)
+#End If
+End Sub
+
+' iOS calls this with the gesture owner just before RaiseLongClick.
+' The panel stays on the class. Process_Globals cannot hold a Panel.
+#if B4i
+Public Sub NoteLongPress(lp As clsLongPress)
+	lastPress = lp
+End Sub
+#End If
+
+Public Sub RaiseLongClick(callback As Object, eventName As String)
+	CallSub(callback, eventName & "_LongClick")
+End Sub
+
+' Android long-click passes the panel as Sender. iOS returns the panel from the gesture class.
+Public Sub LongClickPanel(senderObj As Object) As Panel
+	If senderObj Is Panel Then Return senderObj
+#if B4i
+	If lastPress.IsInitialized Then Return lastPress.HostPanel
+#End If
+	Dim empty As Panel
+	Return empty
 End Sub
 
 ' Standard top bar height (back + title + optional action).
@@ -129,7 +537,7 @@ End Sub
 
 ' Consistent chrome: ← on the left, title beside it, optional trailing glyph button on the right.
 ' Returns Map: ContentTop (Int), TitleLabel (Label).
-Public Sub AddPageChrome(Root As B4XView, Title As String, BackEvent As String, _
+Public Sub AddPageChrome(callback As Object, Root As B4XView, Title As String, BackEvent As String, _
 		ActionEvent As String, ActionGlyph As String, Dark As Boolean) As Map
 	Dim bg As Int = modConfig.COLOR_SURFACE
 	Dim titleCol As Int = modConfig.COLOR_PRIMARY
@@ -142,32 +550,34 @@ Public Sub AddPageChrome(Root As B4XView, Title As String, BackEvent As String, 
 		actionBg = modConfig.COLOR_ACCENT
 	End If
 	Root.Color = bg
+	ExpandRoot(Root)
+	Dim pageW As Int = ViewWidth(Root)
 	
 	Dim left As Int = 4dip
 	If BackEvent <> "" Then
-		Dim btnBack As Button = CreateChromeIconButton(BackEvent, "←", Colors.Transparent, btnFg)
-		btnBack.TextSize = 26
+		Dim btnBack As Button = CreateChromeIconButton(callback, BackEvent, "←", Colors.Transparent, btnFg)
+		SetTextSize(btnBack, 26)
 		Root.AddView(btnBack, left, 6dip, 44dip, 44dip)
 		left = left + 44dip
 	End If
 	
 	Dim rightPad As Int = 12dip
 	If ActionEvent <> "" Then
-		Dim btnAct As Button = CreateChromeIconButton(ActionEvent, ActionGlyph, actionBg, Colors.White)
-		btnAct.TextSize = 22
-		Root.AddView(btnAct, Root.Width - 52dip, 10dip, 40dip, 36dip)
+		Dim btnAct As Button = CreateChromeIconButton(callback, ActionEvent, ActionGlyph, actionBg, Colors.White)
+		SetTextSize(btnAct, 22)
+		Root.AddView(btnAct, pageW - 52dip, 10dip, 40dip, 36dip)
 		rightPad = 60dip
 	End If
 	
 	Dim lblTitle As Label
 	lblTitle.Initialize("")
 	lblTitle.Text = Title
-	lblTitle.TextSize = 20
-	lblTitle.Typeface = Typeface.DEFAULT_BOLD
+	SetTextSize(lblTitle, 20)
+	SetBold(lblTitle, True)
 	lblTitle.TextColor = titleCol
-	lblTitle.Gravity = Gravity.CENTER_VERTICAL
-	lblTitle.SingleLine = True
-	Root.AddView(lblTitle, left, 10dip, Root.Width - left - rightPad, 36dip)
+	SetAlign(lblTitle, "CENTER", "LEFT")
+	SetSingleLine(lblTitle, True)
+	Root.AddView(lblTitle, left, 10dip, pageW - left - rightPad, 36dip)
 	
 	Dim out As Map
 	out.Initialize
@@ -176,22 +586,22 @@ Public Sub AddPageChrome(Root As B4XView, Title As String, BackEvent As String, 
 	Return out
 End Sub
 
-Public Sub CreateChromeIconButton(EventName As String, glyph As String, bgColor As Int, fgColor As Int) As Button
+Public Sub CreateChromeIconButton(callback As Object, EventName As String, glyph As String, bgColor As Int, fgColor As Int) As Button
 	Dim b As Button
-	b.Initialize(EventName)
+	InitButton(callback, b, EventName)
 	b.Text = glyph
-	b.TextSize = 18
-	b.Typeface = Typeface.DEFAULT_BOLD
-	b.TextColor = fgColor
+	SetTextSize(b, 18)
+	SetBold(b, True)
+	SetButtonTextColor(b, fgColor)
 	If bgColor = Colors.Transparent Then
-		Dim cd As ColorDrawable
-		cd.Initialize(Colors.Transparent, 0)
-		b.Background = cd
+		RoundView(b, Colors.Transparent, 0)
 	Else
 		b.Color = bgColor
 	End If
-	b.Gravity = Gravity.CENTER
+	SetAlign(b, "CENTER", "CENTER")
+#if B4A
 	b.Padding = Array As Int(0, 0, 0, 0)
+#End If
 	Return b
 End Sub
 
@@ -263,12 +673,8 @@ Public Sub CreateMatchCardThemed(Width As Int, match As Map, EventName As String
 	End If
 	
 	Dim card As Panel
-	If EventName = "" Then
-		card.Initialize("")
-	Else
-		card.Initialize(EventName)
-	End If
-	card.Background = RoundedBg(cardBg, 12dip)
+	WirePanel(card, EventName, Null)
+	RoundView(card, cardBg, 12dip)
 	
 	Dim dateStr As String = match.GetDefault("date", "")
 	Dim monthTxt As String = MonthAbbrFromDate(dateStr)
@@ -276,16 +682,16 @@ Public Sub CreateMatchCardThemed(Width As Int, match As Map, EventName As String
 	
 	Dim chip As Panel
 	chip.Initialize("")
-	chip.Background = RoundedBg(chipBg, 10dip)
+	RoundView(chip, chipBg, 10dip)
 	card.AddView(chip, 10dip, 14dip, 58dip, 64dip)
 	
 	Dim lblDate As Label
 	lblDate.Initialize("")
 	lblDate.Text = monthTxt & " " & dayTxt
-	lblDate.TextSize = 12
+	SetTextSize(lblDate, 12)
 	lblDate.TextColor = chipFg
-	lblDate.Gravity = Gravity.CENTER
-	lblDate.Typeface = Typeface.DEFAULT_BOLD
+	SetAlign(lblDate, "CENTER", "CENTER")
+	SetBold(lblDate, True)
 	chip.AddView(lblDate, 2dip, 0, 54dip, 64dip)
 	
 	Dim midLeft As Int = 78dip
@@ -298,11 +704,11 @@ Public Sub CreateMatchCardThemed(Width As Int, match As Map, EventName As String
 	Dim lblTitle As Label
 	lblTitle.Initialize("")
 	lblTitle.Text = match.GetDefault("title", "Match")
-	lblTitle.TextSize = 15
+	SetTextSize(lblTitle, 15)
 	lblTitle.TextColor = titleColor
-	lblTitle.Typeface = Typeface.DEFAULT_BOLD
-	lblTitle.Gravity = Gravity.CENTER_VERTICAL
-	lblTitle.SingleLine = True
+	SetBold(lblTitle, True)
+	SetAlign(lblTitle, "CENTER", "LEFT")
+	SetSingleLine(lblTitle, True)
 	card.AddView(lblTitle, midLeft, 10dip, midW, 24dip)
 	
 	Dim loc As String = match.GetDefault("location", "")
@@ -310,33 +716,33 @@ Public Sub CreateMatchCardThemed(Width As Int, match As Map, EventName As String
 	Dim lblLoc As Label
 	lblLoc.Initialize("")
 	lblLoc.Text = loc
-	lblLoc.TextSize = 12
+	SetTextSize(lblLoc, 12)
 	lblLoc.TextColor = mutedColor
-	lblLoc.SingleLine = True
+	SetSingleLine(lblLoc, True)
 	card.AddView(lblLoc, midLeft, 36dip, midW, 18dip)
 	
 	Dim meta As String = BuildMatchMeta(match, status)
 	Dim lblMeta As Label
 	lblMeta.Initialize("")
 	lblMeta.Text = meta
-	lblMeta.TextSize = 12
+	SetTextSize(lblMeta, 12)
 	lblMeta.TextColor = mutedColor
 	If status = "LIVE" Then lblMeta.TextColor = modConfig.COLOR_LIVE
-	lblMeta.SingleLine = True
+	SetSingleLine(lblMeta, True)
 	card.AddView(lblMeta, midLeft, 56dip, midW, 18dip)
 	
 	If status = "LIVE" Then
 		Dim badge As Panel
 		badge.Initialize("")
-		badge.Background = RoundedBg(modConfig.COLOR_LIVE, 8dip)
+		RoundView(badge, modConfig.COLOR_LIVE, 8dip)
 		card.AddView(badge, Width - 64dip, 14dip, 50dip, 22dip)
 		Dim lblLive As Label
 		lblLive.Initialize("")
 		lblLive.Text = "LIVE"
-		lblLive.TextSize = 10
+		SetTextSize(lblLive, 10)
 		lblLive.TextColor = Colors.White
-		lblLive.Typeface = Typeface.DEFAULT_BOLD
-		lblLive.Gravity = Gravity.CENTER
+		SetBold(lblLive, True)
+		SetAlign(lblLive, "CENTER", "CENTER")
 		badge.AddView(lblLive, 0, 0, 50dip, 22dip)
 	End If
 	
@@ -345,40 +751,38 @@ End Sub
 
 Public Sub CreateLiveBanner(Width As Int, match As Map, EventName As String) As Panel
 	Dim banner As Panel
-	If EventName = "" Then
-		banner.Initialize("")
-	Else
-		banner.Initialize(EventName)
-	End If
-	banner.Background = RoundedBg(modConfig.COLOR_LIVE, 12dip)
+	WirePanel(banner, EventName, Null)
+	RoundView(banner, modConfig.COLOR_LIVE, 12dip)
 	
 	Dim lblPill As Label
 	lblPill.Initialize("")
 	lblPill.Text = "LIVE NOW"
-	lblPill.TextSize = 10
+	SetTextSize(lblPill, 10)
 	lblPill.TextColor = Colors.White
-	lblPill.Typeface = Typeface.DEFAULT_BOLD
-	lblPill.Gravity = Gravity.CENTER_VERTICAL
+	SetBold(lblPill, True)
+	SetAlign(lblPill, "CENTER", "LEFT")
 	banner.AddView(lblPill, 14dip, 8dip, 100dip, 16dip)
 	
 	Dim lblTitle As Label
 	lblTitle.Initialize("")
 	lblTitle.Text = match.GetDefault("title", "Match")
-	lblTitle.TextSize = 15
+	SetTextSize(lblTitle, 15)
 	lblTitle.TextColor = Colors.White
-	lblTitle.Typeface = Typeface.DEFAULT_BOLD
-	lblTitle.SingleLine = True
-	banner.AddView(lblTitle, 14dip, 26dip, Width - 100dip, 22dip)
+	SetBold(lblTitle, True)
+	SetSingleLine(lblTitle, True)
+	banner.AddView(lblTitle, 14dip, 26dip, Width - 164dip, 22dip)
 	
-	Dim score As String = match.GetDefault("scoreA", 0) & " - " & match.GetDefault("scoreB", 0)
+	Dim score As String = modLocal.ScoreLine(match)
 	Dim lblScore As Label
 	lblScore.Initialize("")
 	lblScore.Text = score
-	lblScore.TextSize = 20
+	SetTextSize(lblScore, 20)
+	If score.Length > 7 Then SetTextSize(lblScore, 13)
 	lblScore.TextColor = Colors.White
-	lblScore.Typeface = Typeface.DEFAULT_BOLD
-	lblScore.Gravity = Bit.Or(Gravity.CENTER_VERTICAL, Gravity.RIGHT)
-	banner.AddView(lblScore, Width - 90dip, 18dip, 76dip, 36dip)
+	SetBold(lblScore, True)
+	SetAlign(lblScore, "CENTER", "RIGHT")
+	SetSingleLine(lblScore, True)
+	banner.AddView(lblScore, Width - 150dip, 18dip, 136dip, 36dip)
 	
 	Return banner
 End Sub
@@ -394,14 +798,14 @@ Public Sub CreateSectionHeaderThemed(Width As Int, text As String, Dark As Boole
 	Dim lbl As Label
 	lbl.Initialize("")
 	lbl.Text = text.ToUpperCase
-	lbl.TextSize = 11
+	SetTextSize(lbl, 11)
 	If Dark Then
 		lbl.TextColor = modConfig.COLOR_DARK_MUTED
 	Else
 		lbl.TextColor = modConfig.COLOR_MUTED
 	End If
-	lbl.Typeface = Typeface.DEFAULT_BOLD
-	lbl.Gravity = Gravity.CENTER_VERTICAL
+	SetBold(lbl, True)
+	SetAlign(lbl, "CENTER", "LEFT")
 	p.AddView(lbl, 4dip, 0, Width - 8dip, SectionHeaderHeight)
 	Return p
 End Sub
@@ -413,35 +817,29 @@ End Sub
 
 Public Sub CreateSimpleRowThemed(Width As Int, text As String, EventName As String, Dark As Boolean) As Panel
 	Dim p As Panel
-	If EventName = "" Then
-		p.Initialize("")
-	Else
-		p.Initialize(EventName)
-	End If
+	WirePanel(p, EventName, Null)
 	Dim bg As Int = modConfig.COLOR_CARD
 	Dim fg As Int = modConfig.COLOR_PRIMARY
 	If Dark Then
 		bg = modConfig.COLOR_DARK_CARD
 		fg = modConfig.COLOR_DARK_TEXT
 	End If
-	p.Background = RoundedBg(bg, 10dip)
+	RoundView(p, bg, 10dip)
 	Dim lbl As Label
 	lbl.Initialize("")
 	lbl.Text = text
-	lbl.TextSize = 14
+	SetTextSize(lbl, 14)
 	lbl.TextColor = fg
-	lbl.Gravity = Gravity.CENTER_VERTICAL
-	lbl.SingleLine = True
+	SetAlign(lbl, "CENTER", "LEFT")
+	SetSingleLine(lbl, True)
 	p.AddView(lbl, 14dip, 0, Width - 28dip, SimpleRowHeight)
 	Return p
 End Sub
 
 Private Sub BuildMatchMeta(match As Map, status As String) As String
 	Dim kick As String = match.GetDefault("kickOffTime", "")
-	Dim scoreA As Object = match.GetDefault("scoreA", 0)
-	Dim scoreB As Object = match.GetDefault("scoreB", 0)
 	If status = "LIVE" Or status = "COMPLETED" Then
-		Return scoreA & " - " & scoreB & "  ·  " & status
+		Return modLocal.ScoreLine(match) & "  ·  " & status
 	Else If status = "CANCELLED" Then
 		Return "MATCH CANCELLED"
 	Else
@@ -521,11 +919,7 @@ End Sub
 
 Public Sub CreateClubCardThemed(Width As Int, club As Map, EventName As String, Dark As Boolean) As Panel
 	Dim card As Panel
-	If EventName = "" Then
-		card.Initialize("")
-	Else
-		card.Initialize(EventName)
-	End If
+	WirePanel(card, EventName, Null)
 	Dim bg As Int = modConfig.COLOR_CARD
 	Dim nameCol As Int = modConfig.COLOR_PRIMARY
 	Dim mutedCol As Int = modConfig.COLOR_MUTED
@@ -534,15 +928,15 @@ Public Sub CreateClubCardThemed(Width As Int, club As Map, EventName As String, 
 		nameCol = modConfig.COLOR_DARK_TEXT
 		mutedCol = modConfig.COLOR_DARK_MUTED
 	End If
-	card.Background = RoundedBg(bg, 12dip)
+	RoundView(card, bg, 12dip)
 	
 	Dim lblName As Label
 	lblName.Initialize("")
 	lblName.Text = club.GetDefault("name", "Club")
-	lblName.TextSize = 16
+	SetTextSize(lblName, 16)
 	lblName.TextColor = nameCol
-	lblName.Typeface = Typeface.DEFAULT_BOLD
-	lblName.SingleLine = True
+	SetBold(lblName, True)
+	SetSingleLine(lblName, True)
 	card.AddView(lblName, 14dip, 12dip, Width - 48dip, 24dip)
 	
 	Dim members As List
@@ -559,9 +953,9 @@ Public Sub CreateClubCardThemed(Width As Int, club As Map, EventName As String, 
 	Dim lblMeta As Label
 	lblMeta.Initialize("")
 	lblMeta.Text = meta
-	lblMeta.TextSize = 12
+	SetTextSize(lblMeta, 12)
 	lblMeta.TextColor = mutedCol
-	lblMeta.SingleLine = True
+	SetSingleLine(lblMeta, True)
 	card.AddView(lblMeta, 14dip, 40dip, Width - 48dip, 18dip)
 	
 	Dim desc As String = club.GetDefault("description", "")
@@ -569,18 +963,18 @@ Public Sub CreateClubCardThemed(Width As Int, club As Map, EventName As String, 
 		Dim lblDesc As Label
 		lblDesc.Initialize("")
 		lblDesc.Text = desc
-		lblDesc.TextSize = 12
+		SetTextSize(lblDesc, 12)
 		lblDesc.TextColor = mutedCol
-		lblDesc.SingleLine = True
+		SetSingleLine(lblDesc, True)
 		card.AddView(lblDesc, 14dip, 60dip, Width - 48dip, 18dip)
 	End If
 	
 	Dim chev As Label
 	chev.Initialize("")
 	chev.Text = ">"
-	chev.TextSize = 18
+	SetTextSize(chev, 18)
 	chev.TextColor = modConfig.COLOR_ACCENT
-	chev.Gravity = Gravity.CENTER
+	SetAlign(chev, "CENTER", "CENTER")
 	card.AddView(chev, Width - 36dip, 24dip, 28dip, 36dip)
 	Return card
 End Sub
@@ -598,22 +992,22 @@ Public Sub CreateStatPillThemed(Width As Int, label As String, value As String, 
 		bg = modConfig.COLOR_DARK_CARD
 		mutedCol = modConfig.COLOR_DARK_MUTED
 	End If
-	p.Background = RoundedBg(bg, 12dip)
+	RoundView(p, bg, 12dip)
 	Dim lblV As Label
 	lblV.Initialize("")
 	lblV.Text = value
-	lblV.TextSize = 20
+	SetTextSize(lblV, 20)
 	lblV.TextColor = accent
-	lblV.Typeface = Typeface.DEFAULT_BOLD
-	lblV.Gravity = Gravity.CENTER
+	SetBold(lblV, True)
+	SetAlign(lblV, "CENTER", "CENTER")
 	p.AddView(lblV, 0, 8dip, Width, 28dip)
 	Dim lblL As Label
 	lblL.Initialize("")
 	lblL.Text = label
-	lblL.TextSize = 10
+	SetTextSize(lblL, 10)
 	lblL.TextColor = mutedCol
-	lblL.Typeface = Typeface.DEFAULT_BOLD
-	lblL.Gravity = Gravity.CENTER
+	SetBold(lblL, True)
+	SetAlign(lblL, "CENTER", "CENTER")
 	p.AddView(lblL, 0, 36dip, Width, 16dip)
 	Return p
 End Sub
@@ -627,34 +1021,34 @@ Public Sub CreateLeaderboardRow(Width As Int, rank As Int, name As String, value
 		bg = modConfig.COLOR_DARK_CARD
 		nameCol = modConfig.COLOR_DARK_TEXT
 	End If
-	p.Background = RoundedBg(bg, 10dip)
+	RoundView(p, bg, 10dip)
 	
 	Dim lblR As Label
 	lblR.Initialize("")
 	lblR.Text = "#" & rank
-	lblR.TextSize = 13
+	SetTextSize(lblR, 13)
 	lblR.TextColor = modConfig.COLOR_ACCENT
-	lblR.Typeface = Typeface.DEFAULT_BOLD
-	lblR.Gravity = Gravity.CENTER
+	SetBold(lblR, True)
+	SetAlign(lblR, "CENTER", "CENTER")
 	p.AddView(lblR, 8dip, 12dip, 40dip, 24dip)
 	
 	Dim lblN As Label
 	lblN.Initialize("")
 	lblN.Text = name
-	lblN.TextSize = 14
+	SetTextSize(lblN, 14)
 	lblN.TextColor = nameCol
-	lblN.Typeface = Typeface.DEFAULT_BOLD
-	lblN.SingleLine = True
+	SetBold(lblN, True)
+	SetSingleLine(lblN, True)
 	p.AddView(lblN, 52dip, 12dip, Width - 120dip, 24dip)
 	
 	Dim lblV As Label
 	lblV.Initialize("")
 	lblV.Text = valueText
-	lblV.TextSize = 15
+	SetTextSize(lblV, 15)
 	lblV.TextColor = Colors.White
 	If Dark = False Then lblV.TextColor = modConfig.COLOR_PRIMARY
-	lblV.Typeface = Typeface.DEFAULT_BOLD
-	lblV.Gravity = Gravity.CENTER
+	SetBold(lblV, True)
+	SetAlign(lblV, "CENTER", "CENTER")
 	p.AddView(lblV, Width - 64dip, 10dip, 52dip, 28dip)
 	Return p
 End Sub
@@ -662,7 +1056,7 @@ End Sub
 Public Sub CreatePlayerStatRow(Width As Int, player As Map, maxGoals As Int) As Panel
 	Dim p As Panel
 	p.Initialize("")
-	p.Background = RoundedBg(modConfig.COLOR_CARD, 10dip)
+	RoundView(p, modConfig.COLOR_CARD, 10dip)
 	Dim name As String = player.GetDefault("name", "Player")
 	Dim g As Int = player.GetDefault("goals", 0)
 	Dim a As Int = player.GetDefault("assists", 0)
@@ -671,18 +1065,18 @@ Public Sub CreatePlayerStatRow(Width As Int, player As Map, maxGoals As Int) As 
 	Dim lblName As Label
 	lblName.Initialize("")
 	lblName.Text = name
-	lblName.TextSize = 14
+	SetTextSize(lblName, 14)
 	lblName.TextColor = modConfig.COLOR_PRIMARY
-	lblName.Typeface = Typeface.DEFAULT_BOLD
-	lblName.SingleLine = True
+	SetBold(lblName, True)
+	SetSingleLine(lblName, True)
 	p.AddView(lblName, 12dip, 8dip, Width - 24dip, 20dip)
 	
 	Dim lblMeta As Label
 	lblMeta.Initialize("")
 	lblMeta.Text = "G " & g & "   A " & a & "   Apps " & apps & "   YC " & player.GetDefault("yellowCards", 0) & "   POTM " & player.GetDefault("potmWins", 0)
-	lblMeta.TextSize = 11
+	SetTextSize(lblMeta, 11)
 	lblMeta.TextColor = modConfig.COLOR_MUTED
-	lblMeta.SingleLine = True
+	SetSingleLine(lblMeta, True)
 	p.AddView(lblMeta, 12dip, 30dip, Width - 24dip, 16dip)
 	
 	Dim track As Panel
@@ -693,7 +1087,7 @@ Public Sub CreatePlayerStatRow(Width As Int, player As Map, maxGoals As Int) As 
 	If maxGoals > 0 Then fillW = Max(4dip, ((Width - 24dip) * g) / maxGoals)
 	Dim fill As Panel
 	fill.Initialize("")
-	fill.Background = RoundedBg(modConfig.COLOR_ACCENT, 4dip)
+	RoundView(fill, modConfig.COLOR_ACCENT, 4dip)
 	track.AddView(fill, 0, 0, fillW, 8dip)
 	Return p
 End Sub
@@ -718,7 +1112,8 @@ Public Sub TimelineItemHeight(ev As Map) As Int
 	If etype = "SUB" Then Return 130dip
 	If etype = "GOAL" Then
 		Dim assistId As String = details.GetDefault("assist", "")
-		Dim assistUnknown As String = ("" & details.GetDefault("assistUnknown", False)).ToLowerCase
+		Dim assistUnknown As String = "" & details.GetDefault("assistUnknown", False)
+		assistUnknown = assistUnknown.ToLowerCase
 		If assistId <> "" Or assistUnknown = "true" Then Return 118dip
 	End If
 	If etype = "COMMENT" Or etype = "POSITION" Then
@@ -769,7 +1164,8 @@ Public Sub TimelineLines(ev As Map, nameById As Map) As Map
 				mainText = nameById.GetDefault(scorerId, mainText)
 			End If
 			Dim assistId As String = details.GetDefault("assist", "")
-			Dim assistUnknown As String = ("" & details.GetDefault("assistUnknown", False)).ToLowerCase
+			Dim assistUnknown As String = "" & details.GetDefault("assistUnknown", False)
+			assistUnknown = assistUnknown.ToLowerCase
 			If assistId <> "" And nameById.IsInitialized Then
 				line2Text = "Assist · " & nameById.GetDefault(assistId, "?")
 			Else If assistUnknown = "true" Then
@@ -802,14 +1198,41 @@ Public Sub TimelineLines(ev As Map, nameById As Map) As Map
 		Else
 			mainText = "Our team"
 		End If
+	Else If etype = "SHOOTOUT" Then
+		If details.GetDefault("kind", "") = "setup" Then
+			mainText = details.GetDefault("kicksEach", 0) & " each"
+			If details.GetDefault("firstTeam", "A") = "B" Then
+				line2Text = "Opposition start"
+			Else
+				line2Text = "We start"
+			End If
+		Else
+			If details.GetDefault("team", "A") = "B" Then
+				mainText = "Opposition"
+			Else
+				Dim takerId As String = details.GetDefault("player", "")
+				mainText = ResolveName(nameById, takerId, "Our team")
+			End If
+			If modLocal.IsFlag(details, "scored") Then
+				line2Text = "Scored"
+				line2Color = modConfig.COLOR_SUCCESS
+			Else
+				line2Text = "Missed"
+				line2Color = modConfig.COLOR_DANGER
+			End If
+		End If
 	Else If etype = "COMMENT" Or etype = "POSITION" Then
 		mainWrap = True
 	Else
 		mainWrap = (mainText.Length > 22)
 	End If
+	Dim typeLabel As String = FriendlyType(etype)
+	If etype = "SHOOTOUT" And details.GetDefault("kind", "") <> "setup" And modLocal.IsFlag(details, "suddenDeath") Then
+		typeLabel = "SUDDEN DEATH"
+	End If
 	Dim out As Map
 	out.Initialize
-	out.Put("typeLabel", FriendlyType(etype))
+	out.Put("typeLabel", typeLabel)
 	out.Put("minute", timeLabel)
 	out.Put("clock", clock)
 	out.Put("main", mainText)
@@ -842,14 +1265,15 @@ Public Sub CreateTimelineItem(Width As Int, ev As Map, nameById As Map, isFirst 
 	Dim etype As String = ev.GetDefault("type", "EVENT")
 	Dim lines As Map = TimelineLines(ev, nameById)
 	Dim nodeCol As Int = TypeColor(etype)
+	If lines.GetDefault("typeLabel", "") = "SUDDEN DEATH" Then nodeCol = 0xFFF97316
 	Dim node As Panel
 	node.Initialize("")
-	node.Background = RoundedBg(nodeCol, 8dip)
+	RoundView(node, nodeCol, 8dip)
 	row.AddView(node, railW / 2 - 7dip, h / 2 - 7dip, 14dip, 14dip)
 	Dim cardW As Int = Width - railW - 4dip
 	Dim card As Panel
 	card.Initialize("")
-	card.Background = RoundedBg(0xFF1E293B, 12dip)
+	RoundView(card, 0xFF1E293B, 12dip)
 	row.AddView(card, railW, 4dip, cardW, h - 8dip)
 	Dim accent As Panel
 	accent.Initialize("")
@@ -858,17 +1282,17 @@ Public Sub CreateTimelineItem(Width As Int, ev As Map, nameById As Map, isFirst 
 	Dim lblMin As Label
 	lblMin.Initialize("")
 	lblMin.Text = lines.Get("minute")
-	lblMin.TextSize = 15
+	SetTextSize(lblMin, 15)
 	lblMin.TextColor = modConfig.COLOR_ACCENT
-	lblMin.Typeface = Typeface.DEFAULT_BOLD
-	lblMin.Gravity = Gravity.CENTER
+	SetBold(lblMin, True)
+	SetAlign(lblMin, "CENTER", "CENTER")
 	card.AddView(lblMin, 10dip, 10dip, 44dip, 24dip)
 	Dim lblClock As Label
 	lblClock.Initialize("")
 	lblClock.Text = lines.Get("clock")
-	lblClock.TextSize = 11
+	SetTextSize(lblClock, 11)
 	lblClock.TextColor = 0xFF94A3B8
-	lblClock.Gravity = Gravity.CENTER
+	SetAlign(lblClock, "CENTER", "CENTER")
 	card.AddView(lblClock, 10dip, 36dip, 44dip, 16dip)
 	Dim textLeft As Int = 58dip
 	' Leave room for edit/delete overlay buttons on the right of the row
@@ -877,9 +1301,9 @@ Public Sub CreateTimelineItem(Width As Int, ev As Map, nameById As Map, isFirst 
 	Dim lblType As Label
 	lblType.Initialize("")
 	lblType.Text = lines.Get("typeLabel")
-	lblType.TextSize = 10
+	SetTextSize(lblType, 10)
 	lblType.TextColor = nodeCol
-	lblType.Typeface = Typeface.DEFAULT_BOLD
+	SetBold(lblType, True)
 	card.AddView(lblType, textLeft, 8dip, textW, 16dip)
 	
 	Dim mainText As String = lines.Get("main")
@@ -901,12 +1325,12 @@ Public Sub CreateTimelineItem(Width As Int, ev As Map, nameById As Map, isFirst 
 	Dim lblMain As Label
 	lblMain.Initialize("")
 	lblMain.Text = mainText
-	lblMain.TextSize = 14
+	SetTextSize(lblMain, 14)
 	lblMain.TextColor = Colors.White
-	lblMain.Typeface = Typeface.DEFAULT_BOLD
-	lblMain.SingleLine = Not(mainWrap)
+	SetBold(lblMain, True)
+	SetSingleLine(lblMain, Not(mainWrap))
 	If mainWrap Then
-		lblMain.Gravity = Bit.Or(Gravity.TOP, Gravity.LEFT)
+		SetAlign(lblMain, "TOP", "LEFT")
 	End If
 	card.AddView(lblMain, textLeft, 28dip, textW, mainH)
 	
@@ -914,19 +1338,19 @@ Public Sub CreateTimelineItem(Width As Int, ev As Map, nameById As Map, isFirst 
 		Dim lbl2 As Label
 		lbl2.Initialize("")
 		lbl2.Text = line2Text
-		lbl2.TextSize = 14
-		lbl2.Typeface = Typeface.DEFAULT_BOLD
+		SetTextSize(lbl2, 14)
+		SetBold(lbl2, True)
 		If etype = "SUB" Then
 			lbl2.TextColor = 0xFF4ADE80
-			lbl2.SingleLine = False
-			lbl2.Gravity = Bit.Or(Gravity.TOP, Gravity.LEFT)
+			SetSingleLine(lbl2, False)
+			SetAlign(lbl2, "TOP", "LEFT")
 			lblMain.TextColor = 0xFFF87171
 			card.AddView(lbl2, textLeft, 56dip, textW, 28dip)
 		Else
-			lbl2.TextSize = 12
-			lbl2.Typeface = Typeface.DEFAULT
+			SetTextSize(lbl2, 12)
+			SetBold(lbl2, False)
 			lbl2.TextColor = line2Color
-			lbl2.SingleLine = True
+			SetSingleLine(lbl2, True)
 			card.AddView(lbl2, textLeft, 52dip, textW, 18dip)
 		End If
 	End If
@@ -995,21 +1419,25 @@ Private Sub FriendlyType(etype As String) As String
 			Return "CORNER"
 		Case "PENALTY"
 			Return "PENALTY"
+		Case "SHOOTOUT"
+			Return "SHOOTOUT"
 		Case Else
 			Return etype
 	End Select
 End Sub
 
-Public Sub CreateIconButton(EventName As String, glyph As String, bgColor As Int, tag As Object) As Button
+Public Sub CreateIconButton(callback As Object, EventName As String, glyph As String, bgColor As Int, tag As Object) As Button
 	Dim b As Button
-	b.Initialize(EventName)
+	InitButton(callback, b, EventName)
 	b.Text = glyph
-	b.TextSize = 16
-	b.Typeface = Typeface.DEFAULT_BOLD
-	b.TextColor = Colors.White
+	SetTextSize(b, 16)
+	SetBold(b, True)
+	SetButtonTextColor(b, Colors.White)
 	b.Color = bgColor
-	b.Gravity = Gravity.CENTER
+	SetAlign(b, "CENTER", "CENTER")
+#if B4A
 	b.Padding = Array As Int(0, 0, 0, 0)
+#End If
 	b.Tag = tag
 	Return b
 End Sub
@@ -1034,7 +1462,7 @@ Private Sub TypeColor(etype As String) As Int
 			Return 0xFF6366F1
 		Case "CORNER"
 			Return 0xFF14B8A6
-		Case "PENALTY"
+		Case "PENALTY", "SHOOTOUT"
 			Return 0xFFA855F7
 		Case Else
 			Return 0xFF94A3B8
@@ -1066,25 +1494,25 @@ Public Sub CreateMinutesRowThemed(Width As Int, name As String, matchMins As Int
 		nameCol = modConfig.COLOR_DARK_TEXT
 		mutedCol = modConfig.COLOR_DARK_MUTED
 	End If
-	p.Background = RoundedBg(bg, 10dip)
+	RoundView(p, bg, 10dip)
 	Dim lblN As Label
 	lblN.Initialize("")
 	lblN.Text = name
-	lblN.TextSize = 13
+	SetTextSize(lblN, 13)
 	lblN.TextColor = nameCol
-	lblN.Typeface = Typeface.DEFAULT_BOLD
-	lblN.SingleLine = True
+	SetBold(lblN, True)
+	SetSingleLine(lblN, True)
 	p.AddView(lblN, 12dip, 8dip, Width * 0.42, 22dip)
 	Dim lblM As Label
 	lblM.Initialize("")
 	lblM.Text = matchMins & "' game"
-	lblM.TextSize = 12
+	SetTextSize(lblM, 12)
 	lblM.TextColor = modConfig.COLOR_ACCENT
 	p.AddView(lblM, Width * 0.42, 8dip, Width * 0.28, 22dip)
 	Dim lblS As Label
 	lblS.Initialize("")
 	lblS.Text = seasonMins & "' season"
-	lblS.TextSize = 12
+	SetTextSize(lblS, 12)
 	lblS.TextColor = mutedCol
 	p.AddView(lblS, Width * 0.70, 8dip, Width * 0.28 - 8dip, 22dip)
 	Return p
@@ -1154,7 +1582,7 @@ Public Sub CreatePlayerCardThemed(Width As Int, member As Map, availabilityStatu
 		mutedColor = modConfig.COLOR_DARK_MUTED
 		chipBg = modConfig.COLOR_DARK_CHIP
 	End If
-	card.Background = RoundedBg(cardBg, 14dip)
+	RoundView(card, cardBg, 14dip)
 	
 	Dim name As String = member.GetDefault("name", "Player")
 	Dim pos As String = member.GetDefault("preferredPosition", member.GetDefault("favPosition", ""))
@@ -1181,22 +1609,22 @@ Public Sub CreatePlayerCardThemed(Width As Int, member As Map, availabilityStatu
 	Dim avColor As Int = AvatarColorForName(name)
 	Dim avPanel As Panel
 	avPanel.Initialize("")
-	avPanel.Background = RoundedBg(avColor, avSize / 2)
+	RoundView(avPanel, avColor, avSize / 2)
 	card.AddView(avPanel, avLeft, avTop, avSize, avSize)
 	ClipToOutline(avPanel)
 	
 	Dim lblInit As Label
 	lblInit.Initialize("")
 	lblInit.Text = PlayerInitials(name)
-	lblInit.TextSize = 16
+	SetTextSize(lblInit, 16)
 	lblInit.TextColor = Colors.White
-	lblInit.Typeface = Typeface.DEFAULT_BOLD
-	lblInit.Gravity = Gravity.CENTER
+	SetBold(lblInit, True)
+	SetAlign(lblInit, "CENTER", "CENTER")
 	avPanel.AddView(lblInit, 0, 0, avSize, avSize)
 	
 	Dim iv As ImageView
 	iv.Initialize("")
-	iv.Gravity = Gravity.FILL
+	SetImageFill(iv)
 	Dim avatarUrl As String = member.GetDefault("avatar", "")
 	iv.Tag = avatarUrl
 	avPanel.AddView(iv, 0, 0, avSize, avSize)
@@ -1211,15 +1639,15 @@ Public Sub CreatePlayerCardThemed(Width As Int, member As Map, availabilityStatu
 		numStr = "#" & numVal
 		Dim numBadge As Panel
 		numBadge.Initialize("")
-		numBadge.Background = RoundedBg(chipBg, 8dip)
+		RoundView(numBadge, chipBg, 8dip)
 		card.AddView(numBadge, avLeft + avSize - 18dip, avTop + avSize - 16dip, 22dip, 16dip)
 		Dim lblNum As Label
 		lblNum.Initialize("")
 		lblNum.Text = numVal
-		lblNum.TextSize = 9
+		SetTextSize(lblNum, 9)
 		lblNum.TextColor = nameColor
-		lblNum.Typeface = Typeface.DEFAULT_BOLD
-		lblNum.Gravity = Gravity.CENTER
+		SetBold(lblNum, True)
+		SetAlign(lblNum, "CENTER", "CENTER")
 		numBadge.AddView(lblNum, 0, 0, 22dip, 16dip)
 	End If
 	
@@ -1229,10 +1657,10 @@ Public Sub CreatePlayerCardThemed(Width As Int, member As Map, availabilityStatu
 	Dim lblName As Label
 	lblName.Initialize("")
 	lblName.Text = nameLine
-	lblName.TextSize = 15
+	SetTextSize(lblName, 15)
 	lblName.TextColor = nameColor
-	lblName.Typeface = Typeface.DEFAULT_BOLD
-	lblName.SingleLine = True
+	SetBold(lblName, True)
+	SetSingleLine(lblName, True)
 	card.AddView(lblName, textLeft, avTop + 4dip, textW, 24dip)
 	
 	Dim lblPos As Label
@@ -1242,22 +1670,22 @@ Public Sub CreatePlayerCardThemed(Width As Int, member As Map, availabilityStatu
 	Else
 		lblPos.Text = pos
 	End If
-	lblPos.TextSize = 12
+	SetTextSize(lblPos, 12)
 	lblPos.TextColor = mutedColor
-	lblPos.SingleLine = True
+	SetSingleLine(lblPos, True)
 	card.AddView(lblPos, textLeft, avTop + 28dip, textW, 20dip)
 	
 	Dim pill As Panel
 	pill.Initialize("")
-	pill.Background = RoundedBg(statusColor, 12dip)
+	RoundView(pill, statusColor, 12dip)
 	card.AddView(pill, pillLeft, (PlayerCardHeight - 28dip) / 2, pillW, 28dip)
 	Dim lblSt As Label
 	lblSt.Initialize("")
 	lblSt.Text = statusLabel
-	lblSt.TextSize = 11
+	SetTextSize(lblSt, 11)
 	lblSt.TextColor = Colors.White
-	lblSt.Typeface = Typeface.DEFAULT_BOLD
-	lblSt.Gravity = Gravity.CENTER
+	SetBold(lblSt, True)
+	SetAlign(lblSt, "CENTER", "CENTER")
 	pill.AddView(lblSt, 0, 0, pillW, 28dip)
 	
 	Dim meta As Map
@@ -1276,7 +1704,7 @@ End Sub
 
 ' Round lineup-style spot. Panel.Tag is `tag`. Map keys: panel, imageView (uninitialized when there is no photo).
 ' displayName empty shows emptyLabel inside the circle (a free position or a chip such as "Own goal").
-Public Sub CreateRoundPlayerSlot(eventName As String, tag As Object, size As Int, displayName As String, avatarUrl As String, emptyLabel As String, selected As Boolean) As Map
+Public Sub CreateRoundPlayerSlot(Callback As Object, eventName As String, tag As Object, size As Int, displayName As String, avatarUrl As String, emptyLabel As String, selected As Boolean) As Map
 	Dim wrap As Panel
 	wrap.Initialize("")
 	wrap.Color = Colors.Transparent
@@ -1285,15 +1713,14 @@ Public Sub CreateRoundPlayerSlot(eventName As String, tag As Object, size As Int
 	circle.Initialize("")
 	Dim filled As Boolean = displayName <> ""
 	If filled Then
-		circle.Background = RoundedBg(0xFF0F172A, size / 2)
+		RoundView(circle, 0xFF0F172A, size / 2)
 	Else
-		circle.Background = RoundedBg(Colors.ARGB(80, 0, 0, 0), size / 2)
+		RoundView(circle, Colors.ARGB(80, 0, 0, 0), size / 2)
 	End If
 	wrap.AddView(circle, 0, 0, size, size)
 	ClipToOutline(circle)
 	Dim ring As Panel
 	ring.Initialize("")
-	Dim ringCd As ColorDrawable
 	Dim ringCol As Int = Colors.White
 	Dim ringW As Int = 2dip
 	If selected Then
@@ -1302,8 +1729,7 @@ Public Sub CreateRoundPlayerSlot(eventName As String, tag As Object, size As Int
 	Else If filled = False Then
 		ringCol = Colors.ARGB(180, 255, 255, 255)
 	End If
-	ringCd.Initialize2(Colors.Transparent, size / 2, ringW, ringCol)
-	ring.Background = ringCd
+	RoundBorder(ring, Colors.Transparent, size / 2, ringW, ringCol)
 	wrap.AddView(ring, 0, 0, size, size)
 	Dim iv As ImageView
 	Dim hasPhoto As Boolean = False
@@ -1311,35 +1737,35 @@ Public Sub CreateRoundPlayerSlot(eventName As String, tag As Object, size As Int
 		Dim initials As Label
 		initials.Initialize("")
 		initials.Text = PlayerInitials(displayName)
-		initials.TextSize = 13
+		SetTextSize(initials, 13)
 		initials.TextColor = Colors.White
-		initials.Typeface = Typeface.DEFAULT_BOLD
-		initials.Gravity = Gravity.CENTER
+		SetBold(initials, True)
+		SetAlign(initials, "CENTER", "CENTER")
 		circle.AddView(initials, 0, 0, size, size)
 		If avatarUrl <> "" Then
 			iv.Initialize("")
-			iv.Gravity = Gravity.FILL
+			SetImageFill(iv)
 			circle.AddView(iv, 0, 0, size, size)
 			hasPhoto = True
 		End If
 		Dim lblName As Label
 		lblName.Initialize("")
 		lblName.Text = FirstToken(displayName)
-		lblName.TextSize = 9
+		SetTextSize(lblName, 9)
 		lblName.TextColor = Colors.White
-		lblName.Typeface = Typeface.DEFAULT_BOLD
-		lblName.Gravity = Gravity.CENTER
-		lblName.SingleLine = True
+		SetBold(lblName, True)
+		SetAlign(lblName, "CENTER", "CENTER")
+		SetSingleLine(lblName, True)
 		wrap.AddView(lblName, -6dip, size + 1dip, size + 12dip, 14dip)
 	Else
 		Dim lblPos As Label
 		lblPos.Initialize("")
 		lblPos.Text = emptyLabel
-		lblPos.TextSize = 9
+		SetTextSize(lblPos, 9)
 		lblPos.TextColor = Colors.White
-		lblPos.Typeface = Typeface.DEFAULT_BOLD
-		lblPos.Gravity = Gravity.CENTER
-		lblPos.SingleLine = False
+		SetBold(lblPos, True)
+		SetAlign(lblPos, "CENTER", "CENTER")
+		SetSingleLine(lblPos, False)
 		circle.AddView(lblPos, 4dip, 0, size - 8dip, size)
 	End If
 	Dim hit As Panel
@@ -1347,11 +1773,7 @@ Public Sub CreateRoundPlayerSlot(eventName As String, tag As Object, size As Int
 	' A fully clear panel is skipped by hit testing.
 	hit.Color = Colors.ARGB(1, 0, 0, 0)
 	hit.Tag = tag
-	Dim hjo As JavaObject = hit
-	hjo.RunMethod("setLongClickable", Array(True))
-	Dim hook As JavaObject
-	hook.InitializeStatic(Application.PackageName & ".modui")
-	hook.RunMethod("holdForLongPress", Array(hjo))
+	EnableLongClick(hit, Callback, eventName)
 	wrap.AddView(hit, -4dip, 0, size + 8dip, size + 16dip)
 	Dim out As Map
 	out.Initialize
@@ -1370,12 +1792,26 @@ End Sub
 
 ' Clip a view to its background outline (circular ColorDrawable → round avatar).
 Public Sub ClipToOutline(v As View)
+#if B4A
 	Try
 		Dim jo As JavaObject = v
 		jo.RunMethod("setClipToOutline", Array(True))
 	Catch
 		Log("ClipToOutline: " & LastException.Message)
 	End Try
+#else if B4i
+	Try
+		Dim xv As B4XView = v
+		Dim radius As Float = xv.Width / 2
+		If radius < 1 Then radius = xv.Height / 2
+		Dim no As NativeObject = v
+		Dim layer As NativeObject = no.GetField("layer")
+		layer.SetField("cornerRadius", radius)
+		layer.SetField("masksToBounds", True)
+	Catch
+		Log("ClipToOutline: " & LastException.Message)
+	End Try
+#End If
 End Sub
 
 Public Sub AvailabilityLabel(status As String) As String
@@ -1404,7 +1840,7 @@ Public Sub UpdatePlayerCardAvailability(card As Panel, status As String)
 	Dim meta As Map = card.Tag
 	Dim pill As Panel = meta.Get("statusPill")
 	Dim lblSt As Label = meta.Get("statusLabel")
-	pill.Background = RoundedBg(AvailabilityColor(status, True), 12dip)
+	RoundView(pill, AvailabilityColor(status, True), 12dip)
 	lblSt.Text = AvailabilityLabel(status)
 End Sub
 
@@ -1433,36 +1869,32 @@ End Sub
 
 Public Sub CreateHubNavCard(Width As Int, title As String, subtitle As String, EventName As String) As Panel
 	Dim card As Panel
-	If EventName = "" Then
-		card.Initialize("")
-	Else
-		card.Initialize(EventName)
-	End If
-	card.Background = RoundedBg(modConfig.COLOR_CARD, 14dip)
+	WirePanel(card, EventName, Null)
+	RoundView(card, modConfig.COLOR_CARD, 14dip)
 	
 	Dim lblT As Label
 	lblT.Initialize("")
 	lblT.Text = title
-	lblT.TextSize = 16
+	SetTextSize(lblT, 16)
 	lblT.TextColor = modConfig.COLOR_PRIMARY
-	lblT.Typeface = Typeface.DEFAULT_BOLD
-	lblT.SingleLine = True
+	SetBold(lblT, True)
+	SetSingleLine(lblT, True)
 	card.AddView(lblT, 16dip, 14dip, Width - 48dip, 24dip)
 	
 	Dim lblS As Label
 	lblS.Initialize("")
 	lblS.Text = subtitle
-	lblS.TextSize = 12
+	SetTextSize(lblS, 12)
 	lblS.TextColor = modConfig.COLOR_MUTED
-	lblS.SingleLine = True
+	SetSingleLine(lblS, True)
 	card.AddView(lblS, 16dip, 40dip, Width - 48dip, 20dip)
 	
 	Dim chev As Label
 	chev.Initialize("")
 	chev.Text = ">"
-	chev.TextSize = 18
+	SetTextSize(chev, 18)
 	chev.TextColor = modConfig.COLOR_ACCENT
-	chev.Gravity = Gravity.CENTER
+	SetAlign(chev, "CENTER", "CENTER")
 	card.AddView(chev, Width - 36dip, 18dip, 28dip, 36dip)
 	Return card
 End Sub
@@ -1488,9 +1920,7 @@ Public Sub CreatePitchPanel(Width As Int, Height As Int, formation As String, li
 	Dim pitch As Panel
 	pitch.Initialize("")
 	pitch.Color = 0xFF15803D
-	Dim cd As ColorDrawable
-	cd.Initialize2(0xFF15803D, 12dip, borderW, borderCol)
-	pitch.Background = cd
+	RoundBorder(pitch, 0xFF15803D, 12dip, borderW, borderCol)
 	wrap.AddView(pitch, 0, 0, Width, Height)
 	
 	PaintPitchMarkings(pitch)
@@ -1620,6 +2050,10 @@ Public Sub PaintPitchMarkings(pitch As Panel)
 	Dim goalW As Float = pitch.Width * 0.12
 	Dim goalLeft As Float = (pitch.Width - goalW) / 2
 	cvs.DrawLine(goalLeft, pitch.Height - 2dip, goalLeft + goalW, pitch.Height - 2dip, lineCol, 3dip)
+#if B4i
+	cvs.Refresh
+	cvs.Release
+#End If
 End Sub
 
 Private Sub CreateCompactPitchSlot(slotSize As Int, posLabel As String, playerId As String, playerName As String, mins As Int, _
@@ -1632,16 +2066,15 @@ Private Sub CreateCompactPitchSlot(slotSize As Int, posLabel As String, playerId
 	circle.Initialize("")
 	Dim filled As Boolean = playerId <> ""
 	If filled Then
-		circle.Background = RoundedBg(0xFF0F172A, slotSize / 2)
+		RoundView(circle, 0xFF0F172A, slotSize / 2)
 	Else
-		circle.Background = RoundedBg(Colors.ARGB(70, 0, 0, 0), slotSize / 2)
+		RoundView(circle, Colors.ARGB(70, 0, 0, 0), slotSize / 2)
 	End If
 	wrap.AddView(circle, 0, 0, slotSize, slotSize)
 	ClipToOutline(circle)
 	
 	Dim ring As Panel
 	ring.Initialize("")
-	Dim ringCd As ColorDrawable
 	Dim ringCol As Int = Colors.White
 	Dim ringW As Int = 2dip
 	If slotHeld Then
@@ -1650,18 +2083,17 @@ Private Sub CreateCompactPitchSlot(slotSize As Int, posLabel As String, playerId
 	Else If filled = False Then
 		ringCol = Colors.ARGB(180, 255, 255, 255)
 	End If
-	ringCd.Initialize2(Colors.Transparent, slotSize / 2, ringW, ringCol)
-	ring.Background = ringCd
+	RoundBorder(ring, Colors.Transparent, slotSize / 2, ringW, ringCol)
 	wrap.AddView(ring, 0, 0, slotSize, slotSize)
 	
 	If filled Then
 		Dim initials As Label
 		initials.Initialize("")
 		initials.Text = PlayerInitials(playerName)
-		initials.TextSize = 10
+		SetTextSize(initials, 10)
 		initials.TextColor = Colors.White
-		initials.Typeface = Typeface.DEFAULT_BOLD
-		initials.Gravity = Gravity.CENTER
+		SetBold(initials, True)
+		SetAlign(initials, "CENTER", "CENTER")
 		circle.AddView(initials, 0, 0, slotSize, slotSize)
 		
 		Dim caption As String = FirstNameOf(playerName)
@@ -1669,26 +2101,26 @@ Private Sub CreateCompactPitchSlot(slotSize As Int, posLabel As String, playerId
 		Dim lblName As Label
 		lblName.Initialize("")
 		lblName.Text = caption
-		lblName.TextSize = 8
+		SetTextSize(lblName, 8)
 		lblName.TextColor = Colors.White
-		lblName.Typeface = Typeface.DEFAULT_BOLD
-		lblName.Gravity = Gravity.CENTER
-		lblName.SingleLine = True
+		SetBold(lblName, True)
+		SetAlign(lblName, "CENTER", "CENTER")
+		SetSingleLine(lblName, True)
 		wrap.AddView(lblName, -10dip, slotSize, slotSize + 20dip, 16dip)
 	Else
 		Dim lblPos As Label
 		lblPos.Initialize("")
 		lblPos.Text = posLabel
-		lblPos.TextSize = 9
+		SetTextSize(lblPos, 9)
 		lblPos.TextColor = Colors.ARGB(230, 255, 255, 255)
-		lblPos.Typeface = Typeface.DEFAULT_BOLD
-		lblPos.Gravity = Gravity.CENTER
+		SetBold(lblPos, True)
+		SetAlign(lblPos, "CENTER", "CENTER")
 		circle.AddView(lblPos, 0, 0, slotSize, slotSize)
 	End If
 	If EventName <> "" And Callback <> Null Then
 		Dim hit As Panel
 		' The event is registered on the caller (the page), not this module.
-		hit.Initialize(EventName)
+		WirePanel(hit, EventName, Callback)
 		' A fully clear panel is skipped by hit testing.
 		hit.Color = Colors.ARGB(1, 0, 0, 0)
 		Dim info As Map
@@ -1696,12 +2128,7 @@ Private Sub CreateCompactPitchSlot(slotSize As Int, posLabel As String, playerId
 		info.Put("slotId", posId)
 		info.Put("quarter", quarter)
 		hit.Tag = info
-		Dim hjo As JavaObject = hit
-		hjo.RunMethod("setLongClickable", Array(True))
-		' Keep the scroll view from cancelling a held press. Returning false lets the long-click through.
-		Dim hook As JavaObject
-		hook.InitializeStatic(Application.PackageName & ".modui")
-		hook.RunMethod("holdForLongPress", Array(hjo))
+		EnableLongClick(hit, Callback, EventName)
 		wrap.AddView(hit, 0, 0, slotSize, slotSize + 18dip)
 	End If
 	Return wrap

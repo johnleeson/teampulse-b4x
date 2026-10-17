@@ -1,4 +1,5 @@
 ﻿B4A=true
+B4i=true
 Group=Default Group
 ModulesStructureVersion=1
 Type=Class
@@ -94,9 +95,7 @@ End Sub
 
 Public Sub AuthPost(pathAndQuery As String, bodyMap As Map) As ResumableSub
 	Dim url As String = modConfig.SUPABASE_URL & "/auth/v1/" & pathAndQuery
-	Dim jg As JSONGenerator
-	jg.Initialize(bodyMap)
-	Wait For (Request("POST", url, jg.ToString, False, "return=representation")) Complete (res As Map)
+	Wait For (Request("POST", url, modPlatform.JsonString(bodyMap), False, "return=representation")) Complete (res As Map)
 	Return res
 End Sub
 
@@ -114,17 +113,7 @@ End Sub
 
 Public Sub RestPost(tableAndQuery As String, body As Object, prefer As String) As ResumableSub
 	Dim url As String = modConfig.SUPABASE_URL & "/rest/v1/" & tableAndQuery
-	Dim bodyText As String
-	Dim jg As JSONGenerator
-	If body Is List Then
-		Dim lst As List = body
-		jg.Initialize2(lst)
-	Else
-		Dim mp As Map = body
-		jg.Initialize(mp)
-	End If
-	bodyText = jg.ToString
-	Wait For (Request("POST", url, bodyText, True, prefer)) Complete (res As Map)
+	Wait For (Request("POST", url, modPlatform.JsonString(body), True, prefer)) Complete (res As Map)
 	Return res
 End Sub
 

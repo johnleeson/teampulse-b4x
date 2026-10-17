@@ -1,4 +1,5 @@
 ﻿B4A=true
+B4i=true
 Group=Default Group
 ModulesStructureVersion=1
 Type=Class
@@ -11,11 +12,31 @@ Sub Class_Globals
 	Private dialog As B4XDialog
 	Private sv As ScrollView
 	Private content As Panel
+#if B4A
 	Private edtName As EditText
+#else if B4i
+	Private edtName As TextField
+#End If
+#if B4A
 	Private edtSquadNumber As EditText
+#else if B4i
+	Private edtSquadNumber As TextField
+#End If
+#if B4A
 	Private edtPhone As EditText
+#else if B4i
+	Private edtPhone As TextField
+#End If
+#if B4A
 	Private edtEmergency As EditText
+#else if B4i
+	Private edtEmergency As TextField
+#End If
+#if B4A
 	Private edtMedical As EditText
+#else if B4i
+	Private edtMedical As TextView
+#End If
 	Private btnPos As Button
 	Private btnPos2 As Button
 	Private btnShuffle As Button
@@ -53,42 +74,42 @@ Private Sub B4XPage_Appear
 End Sub
 
 Private Sub BuildUI
-	Dim chrome As Map = modUI.AddPageChrome(Root, "Edit player", "btnBack", "btnSave", "Save", True)
+	Dim chrome As Map = modUI.AddPageChrome(Me, Root, "Edit player", "btnBack", "btnSave", "Save", True)
 	lblTitle = chrome.Get("TitleLabel")
 	Dim top As Int = chrome.Get("ContentTop")
-	sv.Initialize(2200dip)
-	Root.AddView(sv, 0, top, Root.Width, Root.Height - top)
+	modUI.InitScroll(sv, 2200dip)
+	Root.AddView(sv, 0, top, modUI.ViewWidth(Root), modUI.ViewHeight(Root) - top)
 	content = sv.Panel
 	content.Color = modConfig.COLOR_DARK_BG
 	
 	Dim y As Int = 12dip
-	Dim w As Int = Root.Width - 32dip
+	Dim w As Int = modUI.ViewWidth(Root) - 32dip
 	Dim avSize As Int = 72dip
 	
 	avPanel.Initialize("")
-	avPanel.Background = modUI.RoundedBg(modConfig.COLOR_ACCENT, avSize / 2)
-	content.AddView(avPanel, (Root.Width - avSize) / 2, y, avSize, avSize)
+	modUI.RoundView(avPanel, modConfig.COLOR_ACCENT, avSize / 2)
+	content.AddView(avPanel, (modUI.ViewWidth(Root) - avSize) / 2, y, avSize, avSize)
 	modUI.ClipToOutline(avPanel)
 	
 	lblInitials.Initialize("")
-	lblInitials.TextSize = 22
+	modUI.SetTextSize(lblInitials, 22)
 	lblInitials.TextColor = Colors.White
-	lblInitials.Typeface = Typeface.DEFAULT_BOLD
-	lblInitials.Gravity = Gravity.CENTER
+	modUI.SetBold(lblInitials, True)
+	modUI.SetAlign(lblInitials, "CENTER", "CENTER")
 	avPanel.AddView(lblInitials, 0, 0, avSize, avSize)
 	
 	ivAvatar.Initialize("")
-	ivAvatar.Gravity = Gravity.FILL
+	modUI.SetImageFill(ivAvatar)
 	avPanel.AddView(ivAvatar, 0, 0, avSize, avSize)
 	y = y + avSize + 10dip
 	
-	btnShuffle.Initialize("btnShuffle")
+	modUI.InitButton(Me, btnShuffle, "btnShuffle")
 	btnShuffle.Text = "Shuffle avatar"
 	btnShuffle.Color = Colors.Transparent
-	btnShuffle.TextColor = modConfig.COLOR_ACCENT
-	btnShuffle.TextSize = 12
-	btnShuffle.Typeface = Typeface.DEFAULT_BOLD
-	btnShuffle.Gravity = Gravity.CENTER
+	modUI.SetButtonTextColor(btnShuffle, modConfig.COLOR_ACCENT)
+	modUI.SetTextSize(btnShuffle, 12)
+	modUI.SetBold(btnShuffle, True)
+	modUI.SetAlign(btnShuffle, "CENTER", "CENTER")
 	content.AddView(btnShuffle, 16dip, y, w, 28dip)
 	y = y + 40dip
 	
@@ -101,9 +122,9 @@ Private Sub BuildUI
 	y = AddFieldLabel(y, w, "ROLE")
 	Dim gap As Int = 8dip
 	Dim bw As Int = (w - gap * 2) / 3
-	btnRolePlayer.Initialize("btnRolePlayer")
-	btnRoleCoach.Initialize("btnRoleCoach")
-	btnRoleSpectator.Initialize("btnRoleSpectator")
+	modUI.InitButton(Me, btnRolePlayer, "btnRolePlayer")
+	modUI.InitButton(Me, btnRoleCoach, "btnRoleCoach")
+	modUI.InitButton(Me, btnRoleSpectator, "btnRoleSpectator")
 	btnRolePlayer.Text = "Player"
 	btnRoleCoach.Text = "Coach"
 	btnRoleSpectator.Text = "Spectator"
@@ -112,7 +133,7 @@ Private Sub BuildUI
 	content.AddView(btnRoleSpectator, 16dip + (bw + gap) * 2, y, bw, 44dip)
 	y = y + 50dip
 	lblRoleHint.Initialize("")
-	lblRoleHint.TextSize = 12
+	modUI.SetTextSize(lblRoleHint, 12)
 	lblRoleHint.TextColor = modConfig.COLOR_DARK_MUTED
 	content.AddView(lblRoleHint, 16dip, y, w, 40dip)
 	y = y + 44dip
@@ -120,18 +141,18 @@ Private Sub BuildUI
 	y = AddFieldLabel(y, w, "SQUAD #")
 	edtSquadNumber.Initialize("")
 	modUI.StyleEditTextDark(edtSquadNumber, "e.g. 7")
-	edtSquadNumber.InputType = edtSquadNumber.INPUT_TYPE_NUMBERS
+	modUI.SetKeyboard(edtSquadNumber, "numbers")
 	content.AddView(edtSquadNumber, 16dip, y, w, 48dip)
 	y = y + 56dip
 	
 	y = AddFieldLabel(y, w, "PREFERRED POSITION")
-	btnPos.Initialize("btnPos")
+	modUI.InitButton(Me, btnPos, "btnPos")
 	StylePickerButton(btnPos)
 	content.AddView(btnPos, 16dip, y, w, 48dip)
 	y = y + 56dip
 	
 	y = AddFieldLabel(y, w, "SECONDARY POSITION")
-	btnPos2.Initialize("btnPos2")
+	modUI.InitButton(Me, btnPos2, "btnPos2")
 	StylePickerButton(btnPos2)
 	content.AddView(btnPos2, 16dip, y, w, 48dip)
 	y = y + 56dip
@@ -151,32 +172,34 @@ Private Sub BuildUI
 	y = AddFieldLabel(y, w, "MEDICAL NOTES")
 	edtMedical.Initialize("")
 	modUI.StyleEditTextDark(edtMedical, "Allergies, injuries…")
-	edtMedical.SingleLine = False
-	edtMedical.Gravity = Bit.Or(Gravity.TOP, Gravity.LEFT)
+	modUI.SetSingleLine(edtMedical, False)
+	modUI.SetAlign(edtMedical, "TOP", "LEFT")
 	content.AddView(edtMedical, 16dip, y, w, 96dip)
 	y = y + 112dip
 	
 	content.Height = Max(y + 24dip, sv.Height + 1)
-	sv.Panel.Height = content.Height
+	modUI.SetScrollContentHeight(sv, content.Height)
 End Sub
 
 Private Sub AddFieldLabel(y As Int, w As Int, text As String) As Int
 	Dim lbl As Label
 	lbl.Initialize("")
 	lbl.Text = text
-	lbl.TextSize = 11
+	modUI.SetTextSize(lbl, 11)
 	lbl.TextColor = modConfig.COLOR_DARK_MUTED
-	lbl.Typeface = Typeface.DEFAULT_BOLD
+	modUI.SetBold(lbl, True)
 	content.AddView(lbl, 16dip, y, w, 18dip)
 	Return y + 22dip
 End Sub
 
 Private Sub StylePickerButton(b As Button)
 	b.Color = modConfig.COLOR_DARK_CARD
-	b.TextColor = modConfig.COLOR_DARK_TEXT
-	b.TextSize = 15
-	b.Gravity = Bit.Or(Gravity.CENTER_VERTICAL, Gravity.LEFT)
+	modUI.SetButtonTextColor(b, modConfig.COLOR_DARK_TEXT)
+	modUI.SetTextSize(b, 15)
+	modUI.SetAlign(b, "CENTER", "LEFT")
+#if B4A
 	b.Padding = Array As Int(14dip, 0, 14dip, 0)
+#End If
 End Sub
 
 Private Sub LoadMember
@@ -257,16 +280,18 @@ Private Sub RefreshRoleButtons
 End Sub
 
 Private Sub StyleRoleButton(b As Button, selected As Boolean)
-	b.TextSize = 12
-	b.Typeface = Typeface.DEFAULT_BOLD
-	b.Gravity = Gravity.CENTER
+	modUI.SetTextSize(b, 12)
+	modUI.SetBold(b, True)
+	modUI.SetAlign(b, "CENTER", "CENTER")
+#if B4A
 	b.Padding = Array As Int(4dip, 0, 4dip, 0)
+#End If
 	If selected Then
 		b.Color = modConfig.COLOR_ACCENT
-		b.TextColor = Colors.White
+		modUI.SetButtonTextColor(b, Colors.White)
 	Else
 		b.Color = modConfig.COLOR_DARK_CARD
-		b.TextColor = modConfig.COLOR_DARK_MUTED
+		modUI.SetButtonTextColor(b, modConfig.COLOR_DARK_MUTED)
 	End If
 End Sub
 
@@ -289,7 +314,7 @@ Private Sub RefreshAvatar
 	Dim nm As String = edtName.Text.Trim
 	If nm = "" Then nm = member.GetDefault("name", "Player")
 	lblInitials.Text = modUI.PlayerInitials(nm)
-	avPanel.Background = modUI.RoundedBg(modUI.AvatarColorForName(nm), 36dip)
+	modUI.RoundView(avPanel, modUI.AvatarColorForName(nm), 36dip)
 	If avatarUrl <> "" Then
 		LoadAvatar(avatarUrl)
 	End If
@@ -305,7 +330,7 @@ Private Sub LoadAvatar(url As String)
 			Dim bmp As Bitmap = job.GetBitmap
 			If bmp <> Null And bmp.IsInitialized Then
 				ivAvatar.Bitmap = bmp
-				ivAvatar.Gravity = Gravity.FILL
+				modUI.SetImageFill(ivAvatar)
 			End If
 		Catch
 			Log("PlayerEdit avatar: " & LastException.Message)

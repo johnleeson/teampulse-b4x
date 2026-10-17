@@ -1,4 +1,5 @@
 ﻿B4A=true
+B4i=true
 Group=Default Group
 ModulesStructureVersion=1
 Type=Class
@@ -10,7 +11,11 @@ Sub Class_Globals
 	Private Root As B4XView
 	Private xui As XUI
 	Private dialog As B4XDialog
+#if B4A
 	Private edtDuration As EditText
+#else if B4i
+	Private edtDuration As TextField
+#End If
 	Private clv As CustomListView
 	Private match As Map
 	Private club As Map
@@ -66,56 +71,56 @@ Private Sub B4XPage_Appear
 End Sub
 
 Private Sub BuildUI
-	Dim chrome As Map = modUI.AddPageChrome(Root, "Sub plan", "btnBack", "btnSave", "✓", True)
+	Dim chrome As Map = modUI.AddPageChrome(Me, Root, "Sub plan", "btnBack", "btnSave", "✓", True)
 	Dim top As Int = chrome.Get("ContentTop")
-	Dim w As Int = Root.Width - 32dip
+	Dim w As Int = modUI.ViewWidth(Root) - 32dip
 	
 	Dim lbl As Label
 	lbl.Initialize("")
 	lbl.Text = "MATCH MINUTES"
-	lbl.TextSize = 11
+	modUI.SetTextSize(lbl, 11)
 	lbl.TextColor = modConfig.COLOR_DARK_MUTED
-	lbl.Typeface = Typeface.DEFAULT_BOLD
+	modUI.SetBold(lbl, True)
 	Root.AddView(lbl, 16dip, top, 120dip, 16dip)
 	
 	edtDuration.Initialize("")
 	modUI.StyleEditTextDark(edtDuration, "60")
-	edtDuration.InputType = edtDuration.INPUT_TYPE_NUMBERS
-	edtDuration.Gravity = Gravity.CENTER
+	modUI.SetKeyboard(edtDuration, "numbers")
+	modUI.SetAlign(edtDuration, "CENTER", "CENTER")
 	Root.AddView(edtDuration, 16dip, top + 18dip, 64dip, 44dip)
 	
 	Dim btnFair As Button
-	btnFair.Initialize("btnFair")
+	modUI.InitButton(Me, btnFair, "btnFair")
 	btnFair.Text = "Auto fair"
-	btnFair.TextSize = 12
-	btnFair.Typeface = Typeface.DEFAULT_BOLD
+	modUI.SetTextSize(btnFair, 12)
+	modUI.SetBold(btnFair, True)
 	btnFair.Color = modConfig.COLOR_ACCENT
-	btnFair.TextColor = Colors.White
+	modUI.SetButtonTextColor(btnFair, Colors.White)
 	Root.AddView(btnFair, 88dip, top + 18dip, 100dip, 44dip)
 	
 	Dim btnClear As Button
-	btnClear.Initialize("btnClear")
+	modUI.InitButton(Me, btnClear, "btnClear")
 	btnClear.Text = "Clear"
-	btnClear.TextSize = 12
-	btnClear.Typeface = Typeface.DEFAULT_BOLD
+	modUI.SetTextSize(btnClear, 12)
+	modUI.SetBold(btnClear, True)
 	btnClear.Color = modConfig.COLOR_DARK_CHIP
-	btnClear.TextColor = modConfig.COLOR_DARK_TEXT
+	modUI.SetButtonTextColor(btnClear, modConfig.COLOR_DARK_TEXT)
 	Root.AddView(btnClear, 196dip, top + 18dip, 72dip, 44dip)
 	
 	Dim hint As Label
 	hint.Initialize("")
 	hint.Text = "Long-press two spots to swap them. Tap a pitch to plan that break. Tap a name for 1Q–4Q."
-	hint.TextSize = 11
+	modUI.SetTextSize(hint, 11)
 	hint.TextColor = modConfig.COLOR_DARK_MUTED
-	hint.SingleLine = False
+	modUI.SetSingleLine(hint, False)
 	Root.AddView(hint, 16dip, top + 68dip, w, 56dip)
 	
 	Dim lblQ As Label
 	lblQ.Initialize("")
 	lblQ.Text = "ADD / EDIT SWAP"
-	lblQ.TextSize = 11
+	modUI.SetTextSize(lblQ, 11)
 	lblQ.TextColor = modConfig.COLOR_DARK_MUTED
-	lblQ.Typeface = Typeface.DEFAULT_BOLD
+	modUI.SetBold(lblQ, True)
 	Root.AddView(lblQ, 16dip, top + 128dip, w, 16dip)
 	
 	Dim rowY As Int = top + 148dip
@@ -123,37 +128,37 @@ Private Sub BuildUI
 	Dim gap As Int = 6dip
 	Dim midW As Int = (w - qW - 64dip - gap * 3) / 2
 	
-	btnQuarter.Initialize("btnQuarter")
+	modUI.InitButton(Me, btnQuarter, "btnQuarter")
 	StylePickerButton(btnQuarter)
 	Root.AddView(btnQuarter, 16dip, rowY, qW, 44dip)
 	
-	btnOff.Initialize("btnOff")
+	modUI.InitButton(Me, btnOff, "btnOff")
 	StylePickerButton(btnOff)
 	Root.AddView(btnOff, 16dip + qW + gap, rowY, midW, 44dip)
 	
-	btnOn.Initialize("btnOn")
+	modUI.InitButton(Me, btnOn, "btnOn")
 	StylePickerButton(btnOn)
 	Root.AddView(btnOn, 16dip + qW + gap * 2 + midW, rowY, midW, 44dip)
 	
-	btnAdd.Initialize("btnAddSwap")
+	modUI.InitButton(Me, btnAdd, "btnAddSwap")
 	btnAdd.Text = "Add"
-	btnAdd.TextSize = 12
-	btnAdd.Typeface = Typeface.DEFAULT_BOLD
+	modUI.SetTextSize(btnAdd, 12)
+	modUI.SetBold(btnAdd, True)
 	btnAdd.Color = modConfig.COLOR_SUCCESS
-	btnAdd.TextColor = Colors.White
-	Root.AddView(btnAdd, Root.Width - 16dip - 64dip, rowY, 64dip, 44dip)
+	modUI.SetButtonTextColor(btnAdd, Colors.White)
+	Root.AddView(btnAdd, modUI.ViewWidth(Root) - 16dip - 64dip, rowY, 64dip, 44dip)
 	
-	btnShare.Initialize("btnShare")
+	modUI.InitButton(Me, btnShare, "btnShare")
 	btnShare.Text = "Share sheet"
-	btnShare.TextSize = 14
-	btnShare.Typeface = Typeface.DEFAULT_BOLD
+	modUI.SetTextSize(btnShare, 14)
+	modUI.SetBold(btnShare, True)
 	btnShare.Color = modConfig.COLOR_ACCENT
-	btnShare.TextColor = Colors.White
+	modUI.SetButtonTextColor(btnShare, Colors.White)
 	btnShare.Visible = False
 	Root.AddView(btnShare, 16dip, rowY + 52dip, w, 40dip)
 	
 	Dim listTop As Int = rowY + 100dip
-	clv = modUI.AddCustomListViewThemed(Root, 0, listTop, Root.Width, Root.Height - listTop, Me, "clv", True)
+	clv = modUI.AddCustomListViewThemed(Root, 0, listTop, modUI.ViewWidth(Root), modUI.ViewHeight(Root) - listTop, Me, "clv", True)
 	btnShare.BringToFront
 End Sub
 
@@ -165,7 +170,7 @@ Private Sub PlaceList
 	Else
 		listTop = rowY + 56dip
 	End If
-	clv.AsView.SetLayoutAnimated(0, 0, listTop, Root.Width, Root.Height - listTop)
+	clv.AsView.SetLayoutAnimated(0, 0, listTop, modUI.ViewWidth(Root), modUI.ViewHeight(Root) - listTop)
 	If btnShare.Visible Then btnShare.BringToFront
 End Sub
 
@@ -179,7 +184,7 @@ End Sub
 Private Sub btnShare_Click
 	If sharing Then Return
 	If HasLineup = False Then
-		ToastMessageShow("Set a lineup to share the sheet.", False)
+		modPlatform.Toast("Set a lineup to share the sheet.", False)
 		Return
 	End If
 	Dim duration As Int = edtDuration.Text
@@ -187,10 +192,10 @@ Private Sub btnShare_Click
 	currentSubPlan.Put("matchMinutes", duration)
 	sharing = True
 	btnShare.Enabled = False
-	ProgressDialogShow2("Building sub plan sheet...", False)
+	modPlatform.ProgressShow2("Building sub plan sheet...", False)
 	Try
 		Dim built As Map = modSubPlanExport.BuildFile(match, club, currentSubPlan, CurrentLineup, CurrentFormation, NameByIdMap, ConfirmedSquad, pitchPanels)
-		ProgressDialogHide
+		modPlatform.ProgressHide
 		btnShare.Enabled = True
 		sharing = False
 		If built.IsInitialized = False Or built.GetDefault("ok", False) = False Then
@@ -204,7 +209,7 @@ Private Sub btnShare_Click
 		If shareErr <> "" Then xui.MsgboxAsync(shareErr, "Share")
 	Catch
 		Log("btnShare: " & LastException)
-		ProgressDialogHide
+		modPlatform.ProgressHide
 		btnShare.Enabled = True
 		sharing = False
 		xui.MsgboxAsync("Could not create the sub plan sheet. Nothing was changed.", "Share")
@@ -213,11 +218,11 @@ End Sub
 
 Private Sub StylePickerButton(b As Button)
 	b.Color = modConfig.COLOR_DARK_CARD
-	b.TextColor = modConfig.COLOR_DARK_TEXT
-	b.TextSize = 12
-	b.Typeface = Typeface.DEFAULT_BOLD
-	b.Gravity = Gravity.CENTER
-	b.SingleLine = True
+	modUI.SetButtonTextColor(b, modConfig.COLOR_DARK_TEXT)
+	modUI.SetTextSize(b, 12)
+	modUI.SetBold(b, True)
+	modUI.SetAlign(b, "CENTER", "CENTER")
+	modUI.SetSingleLine(b, True)
 End Sub
 
 Private Sub Load
@@ -549,12 +554,12 @@ Private Sub SelectBreak(breakQ As Int)
 	FillSwapPickers
 	RefreshPickerButtons
 	ShowPlan
-	ToastMessageShow("Planning after Q" & breakQ, False)
+	modPlatform.Toast("Planning after Q" & breakQ, False)
 End Sub
 
 Private Sub btnOff_Click
 	If offIds.Size = 0 Then
-		ToastMessageShow("No one on the pitch for this break", False)
+		modPlatform.Toast("No one on the pitch for this break", False)
 		Return
 	End If
 	Wait For (PickPlayerId(offIds, selectedOffId, "Player off")) Complete (sel As String)
@@ -565,7 +570,7 @@ End Sub
 
 Private Sub btnOn_Click
 	If onIds.Size = 0 Then
-		ToastMessageShow("No bench players available", False)
+		modPlatform.Toast("No bench players available", False)
 		Return
 	End If
 	Wait For (PickPlayerId(onIds, selectedOnId, "Player on")) Complete (sel As String)
@@ -598,7 +603,7 @@ End Sub
 Private Sub ShowPlan
 	clv.Clear
 	pitchPanels.Clear
-	Dim cardW As Int = Root.Width - 24dip
+	Dim cardW As Int = modUI.ViewWidth(Root) - 24dip
 	Dim duration As Int = edtDuration.Text
 	If duration <= 0 Then duration = 60
 	currentSubPlan.Put("matchMinutes", duration)
@@ -608,7 +613,7 @@ Private Sub ShowPlan
 	Dim halfMins As Int = Round(duration / 2)
 	Dim hdr As Panel = modUI.CreateSimpleRowThemed(cardW, _
 		duration & " mins · 4 × " & qMins & "' · half ≈ " & halfMins & "'", "", True)
-	hdr.SetLayout(0, 0, cardW, modUI.SimpleRowHeight)
+	modUI.PlaceView(hdr, 0, 0, cardW, modUI.SimpleRowHeight)
 	clv.Add(hdr, "")
 	
 	Dim lineup As Map = CurrentLineup
@@ -616,11 +621,11 @@ Private Sub ShowPlan
 	
 	' --- Lineup by quarter (4 pitch diagrams) ---
 	Dim xiHdr As Panel = modUI.CreateSectionHeaderThemed(cardW, "LINEUP BY QUARTER", True)
-	xiHdr.SetLayout(0, 0, cardW, modUI.SectionHeaderHeight)
+	modUI.PlaceView(xiHdr, 0, 0, cardW, modUI.SectionHeaderHeight)
 	clv.Add(xiHdr, "")
 	If lineup.Size = 0 Then
 		Dim needXi As Panel = modUI.CreateSimpleRowThemed(cardW, "Set a lineup to preview quarters.", "", True)
-		needXi.SetLayout(0, 0, cardW, modUI.SimpleRowHeight)
+		modUI.PlaceView(needXi, 0, 0, cardW, modUI.SimpleRowHeight)
 		clv.Add(needXi, "")
 	Else
 		Dim formation As String = CurrentFormation
@@ -644,7 +649,7 @@ Private Sub ShowPlan
 			End If
 			If selected Then title = "After Q" & breakQ & "  ·  planning this break"
 			Dim titleRow As Panel = modUI.CreateSimpleRowThemed(cardW, title, "", True)
-			titleRow.SetLayout(0, 0, cardW, modUI.SimpleRowHeight)
+			modUI.PlaceView(titleRow, 0, 0, cardW, modUI.SimpleRowHeight)
 			If breakQ > 0 Then
 				clv.Add(titleRow, "break:" & breakQ)
 			Else
@@ -655,7 +660,7 @@ Private Sub ShowPlan
 			If q = holdQuarter Then holdId = holdSlotId
 			Dim pitchPanel As Panel = modUI.CreatePitchPanel(cardW, pitchH, formation, xi, names, projectedCache, selected, _
 				pitchLayout, Me, "pitchSlot", q, holdId)
-			pitchPanel.SetLayout(0, 0, cardW, pitchH)
+			modUI.PlaceView(pitchPanel, 0, 0, cardW, pitchH)
 			pitchPanels.Add(pitchPanel)
 			If breakQ > 0 Then
 				clv.Add(pitchPanel, "break:" & breakQ)
@@ -674,7 +679,7 @@ Private Sub ShowPlan
 					Dim inN As String = s.GetDefault("inName", names.GetDefault(s.GetDefault("playerIn", ""), "?"))
 					Dim label2 As String = outN & " → " & inN
 					Dim row As Panel = BuildSwapRow(cardW, label2, si)
-					row.SetLayout(0, 0, cardW, 52dip)
+					modUI.PlaceView(row, 0, 0, cardW, 52dip)
 					clv.Add(row, "swap:" & si)
 				Next
 				Dim anyMove As Boolean = False
@@ -686,12 +691,12 @@ Private Sub ShowPlan
 					If breakQ <> mv.GetDefault("afterQuarter", 0) Then Continue
 					anyMove = True
 					Dim moveRow As Panel = BuildMoveRow(cardW, MoveCaption(mv), mi)
-					moveRow.SetLayout(0, 0, cardW, 52dip)
+					modUI.PlaceView(moveRow, 0, 0, cardW, 52dip)
 					clv.Add(moveRow, "move:" & mi)
 				Next
 				If anySwap = False And anyMove = False Then
 					Dim noneAt As Panel = modUI.CreateSimpleRowThemed(cardW, "No swaps after Q" & breakQ & " yet", "", True)
-					noneAt.SetLayout(0, 0, cardW, modUI.SimpleRowHeight)
+					modUI.PlaceView(noneAt, 0, 0, cardW, modUI.SimpleRowHeight)
 					clv.Add(noneAt, "break:" & breakQ)
 				End If
 			End If
@@ -701,17 +706,17 @@ Private Sub ShowPlan
 	Dim autoFlag As Boolean = currentSubPlan.GetDefault("autoGenerated", False)
 	If autoFlag Then
 		Dim autoNote As Panel = modUI.CreateSimpleRowThemed(cardW, "Auto fair plan — edit swaps under each pitch", "", True)
-		autoNote.SetLayout(0, 0, cardW, modUI.SimpleRowHeight)
+		modUI.PlaceView(autoNote, 0, 0, cardW, modUI.SimpleRowHeight)
 		clv.Add(autoNote, "")
 	End If
 	
 	Dim minsHdr As Panel = modUI.CreateSectionHeaderThemed(cardW, "PLAYING TIME (tap target)", True)
-	minsHdr.SetLayout(0, 0, cardW, modUI.SectionHeaderHeight)
+	modUI.PlaceView(minsHdr, 0, 0, cardW, modUI.SectionHeaderHeight)
 	clv.Add(minsHdr, "")
 	
 	If lineup.Size = 0 Then
 		Dim need As Panel = modUI.CreateSimpleRowThemed(cardW, "Set a lineup to see minutes.", "", True)
-		need.SetLayout(0, 0, cardW, modUI.SimpleRowHeight)
+		modUI.PlaceView(need, 0, 0, cardW, modUI.SimpleRowHeight)
 		clv.Add(need, "")
 		Return
 	End If
@@ -743,7 +748,7 @@ Private Sub ShowPlan
 		Dim tgtQ As Int = TargetQuarters(pid2)
 		Dim tgtMins As Int = Round(tgtQ * (duration / 4.0))
 		Dim rowM As Panel = BuildMinutesTargetRow(cardW, names.GetDefault(pid2, "?"), matchMins, seasonMins, tgtQ, tgtMins, gameWord)
-		rowM.SetLayout(0, 0, cardW, 48dip)
+		modUI.PlaceView(rowM, 0, 0, cardW, 48dip)
 		clv.Add(rowM, "target:" & pid2)
 	Next
 End Sub
@@ -751,7 +756,7 @@ End Sub
 Private Sub BuildMinutesTargetRow(Width As Int, name As String, matchMins As Int, seasonMins As Int, tgtQ As Int, tgtMins As Int, gameWord As String) As Panel
 	Dim p As Panel
 	p.Initialize("")
-	p.Background = modUI.RoundedBg(modConfig.COLOR_DARK_CARD, 10dip)
+	modUI.RoundView(p, modConfig.COLOR_DARK_CARD, 10dip)
 	
 	Dim below As Boolean = matchMins < tgtMins
 	Dim nameCol As Int = modConfig.COLOR_DARK_TEXT
@@ -760,33 +765,33 @@ Private Sub BuildMinutesTargetRow(Width As Int, name As String, matchMins As Int
 	Dim lblN As Label
 	lblN.Initialize("")
 	lblN.Text = name
-	lblN.TextSize = 13
+	modUI.SetTextSize(lblN, 13)
 	lblN.TextColor = nameCol
-	lblN.Typeface = Typeface.DEFAULT_BOLD
-	lblN.SingleLine = True
+	modUI.SetBold(lblN, True)
+	modUI.SetSingleLine(lblN, True)
 	p.AddView(lblN, 12dip, 6dip, Width * 0.40, 20dip)
 	
 	Dim lblT As Label
 	lblT.Initialize("")
 	lblT.Text = "target " & tgtQ & "Q (~" & tgtMins & "')"
-	lblT.TextSize = 11
+	modUI.SetTextSize(lblT, 11)
 	lblT.TextColor = modConfig.COLOR_DARK_MUTED
 	p.AddView(lblT, 12dip, 26dip, Width * 0.40, 16dip)
 	
 	Dim lblM As Label
 	lblM.Initialize("")
 	lblM.Text = matchMins & "' " & gameWord
-	lblM.TextSize = 12
+	modUI.SetTextSize(lblM, 12)
 	lblM.TextColor = modConfig.COLOR_ACCENT
-	lblM.Gravity = Gravity.CENTER
+	modUI.SetAlign(lblM, "CENTER", "CENTER")
 	p.AddView(lblM, Width * 0.42, 12dip, Width * 0.28, 24dip)
 	
 	Dim lblS As Label
 	lblS.Initialize("")
 	lblS.Text = seasonMins & "' season"
-	lblS.TextSize = 12
+	modUI.SetTextSize(lblS, 12)
 	lblS.TextColor = modConfig.COLOR_DARK_MUTED
-	lblS.Gravity = Gravity.CENTER
+	modUI.SetAlign(lblS, "CENTER", "CENTER")
 	p.AddView(lblS, Width * 0.70, 12dip, Width * 0.28 - 8dip, 24dip)
 	Return p
 End Sub
@@ -794,34 +799,34 @@ End Sub
 Private Sub BuildSwapRow(Width As Int, text As String, swapIndex As Int) As Panel
 	Dim p As Panel
 	p.Initialize("")
-	p.Background = modUI.RoundedBg(modConfig.COLOR_DARK_CARD, 12dip)
+	modUI.RoundView(p, modConfig.COLOR_DARK_CARD, 12dip)
 	
 	Dim lbl As Label
 	lbl.Initialize("")
 	lbl.Text = text
-	lbl.TextSize = 13
+	modUI.SetTextSize(lbl, 13)
 	lbl.TextColor = modConfig.COLOR_DARK_TEXT
-	lbl.SingleLine = True
-	lbl.Gravity = Gravity.CENTER_VERTICAL
+	modUI.SetSingleLine(lbl, True)
+	modUI.SetAlign(lbl, "CENTER", "LEFT")
 	p.AddView(lbl, 12dip, 0, Width - 120dip, 52dip)
 	
 	Dim btnEdit As Button
-	btnEdit.Initialize("btnEditSwap")
+	modUI.InitButton(Me, btnEdit, "btnEditSwap")
 	btnEdit.Text = "Edit"
-	btnEdit.TextSize = 11
-	btnEdit.Typeface = Typeface.DEFAULT_BOLD
+	modUI.SetTextSize(btnEdit, 11)
+	modUI.SetBold(btnEdit, True)
 	btnEdit.Color = modConfig.COLOR_DARK_CHIP
-	btnEdit.TextColor = modConfig.COLOR_DARK_TEXT
+	modUI.SetButtonTextColor(btnEdit, modConfig.COLOR_DARK_TEXT)
 	btnEdit.Tag = swapIndex
 	p.AddView(btnEdit, Width - 108dip, 10dip, 48dip, 32dip)
 	
 	Dim btnDel As Button
-	btnDel.Initialize("btnDelSwap")
+	modUI.InitButton(Me, btnDel, "btnDelSwap")
 	btnDel.Text = "Del"
-	btnDel.TextSize = 11
-	btnDel.Typeface = Typeface.DEFAULT_BOLD
+	modUI.SetTextSize(btnDel, 11)
+	modUI.SetBold(btnDel, True)
 	btnDel.Color = modConfig.COLOR_DANGER
-	btnDel.TextColor = Colors.White
+	modUI.SetButtonTextColor(btnDel, Colors.White)
 	btnDel.Tag = swapIndex
 	p.AddView(btnDel, Width - 54dip, 10dip, 42dip, 32dip)
 	Return p
@@ -830,31 +835,31 @@ End Sub
 Private Sub BuildMoveRow(Width As Int, text As String, moveIndex As Int) As Panel
 	Dim p As Panel
 	p.Initialize("")
-	p.Background = modUI.RoundedBg(modConfig.COLOR_DARK_CARD, 12dip)
+	modUI.RoundView(p, modConfig.COLOR_DARK_CARD, 12dip)
 	
 	Dim lbl As Label
 	lbl.Initialize("")
 	lbl.Text = text
-	lbl.TextSize = 13
+	modUI.SetTextSize(lbl, 13)
 	lbl.TextColor = modConfig.COLOR_DARK_TEXT
-	lbl.SingleLine = True
-	lbl.Gravity = Gravity.CENTER_VERTICAL
+	modUI.SetSingleLine(lbl, True)
+	modUI.SetAlign(lbl, "CENTER", "LEFT")
 	p.AddView(lbl, 12dip, 0, Width - 70dip, 52dip)
 	
 	Dim btnDel As Button
-	btnDel.Initialize("btnDelMove")
+	modUI.InitButton(Me, btnDel, "btnDelMove")
 	btnDel.Text = "Del"
-	btnDel.TextSize = 11
-	btnDel.Typeface = Typeface.DEFAULT_BOLD
+	modUI.SetTextSize(btnDel, 11)
+	modUI.SetBold(btnDel, True)
 	btnDel.Color = modConfig.COLOR_DANGER
-	btnDel.TextColor = Colors.White
+	modUI.SetButtonTextColor(btnDel, Colors.White)
 	btnDel.Tag = moveIndex
 	p.AddView(btnDel, Width - 54dip, 10dip, 42dip, 32dip)
 	Return p
 End Sub
 
 Private Sub btnDelMove_Click
-	Dim b As Button = Sender
+	Dim b As Button = modUI.ClickedButton(Sender)
 	Dim idx As Int = b.Tag
 	Dim moves As List = MovesList
 	If idx < 0 Or idx >= moves.Size Then Return
@@ -890,12 +895,12 @@ Private Sub clv_ItemClick (Index As Int, Value As Object)
 	currentSubPlan.Put("playTargets", targets)
 	currentSubPlan.Put("autoGenerated", False)
 	Dim names As Map = NameByIdMap
-	ToastMessageShow(FirstName(names.GetDefault(pid, "?")) & " → target " & nextQ & "Q", False)
+	modPlatform.Toast(FirstName(names.GetDefault(pid, "?")) & " → target " & nextQ & "Q", False)
 	ShowPlan
 End Sub
 
 Private Sub btnEditSwap_Click
-	Dim b As Button = Sender
+	Dim b As Button = modUI.ClickedButton(Sender)
 	Dim idx As Int = b.Tag
 	Dim swaps As List = currentSubPlan.GetDefault("swaps", EmptyList)
 	If idx < 0 Or idx >= swaps.Size Then Return
@@ -910,11 +915,11 @@ Private Sub btnEditSwap_Click
 	If selectedOffId <> "" And offIds.IndexOf(selectedOffId) < 0 Then offIds.InsertAt(0, selectedOffId)
 	If selectedOnId <> "" And onIds.IndexOf(selectedOnId) < 0 Then onIds.InsertAt(0, selectedOnId)
 	RefreshPickerButtons
-	ToastMessageShow("Editing swap — change pickers, then Save", False)
+	modPlatform.Toast("Editing swap — change pickers, then Save", False)
 End Sub
 
 Private Sub btnDelSwap_Click
-	Dim b As Button = Sender
+	Dim b As Button = modUI.ClickedButton(Sender)
 	Dim idx As Int = b.Tag
 	Dim swaps As List = currentSubPlan.GetDefault("swaps", EmptyList)
 	If idx < 0 Or idx >= swaps.Size Then Return
@@ -936,11 +941,11 @@ End Sub
 
 Private Sub btnAddSwap_Click
 	If selectedOffId = "" Or selectedOnId = "" Then
-		ToastMessageShow("Need a player off and a player on", False)
+		modPlatform.Toast("Need a player off and a player on", False)
 		Return
 	End If
 	If selectedOffId = selectedOnId Then
-		ToastMessageShow("Pick different players", False)
+		modPlatform.Toast("Pick different players", False)
 		Return
 	End If
 	' Validate against live pitch at this break
@@ -949,14 +954,14 @@ Private Sub btnAddSwap_Click
 	Dim onPitch As Boolean = onPitchIds.IndexOf(selectedOffId) >= 0
 	Dim inAlready As Boolean = onPitchIds.IndexOf(selectedOnId) >= 0
 	If onPitch = False Then
-		ToastMessageShow("That player is not on the pitch for this break", False)
+		modPlatform.Toast("That player is not on the pitch for this break", False)
 		RefreshProjected
 		FillSwapPickers
 		RefreshPickerButtons
 		Return
 	End If
 	If inAlready Then
-		ToastMessageShow("That player is already on the pitch", False)
+		modPlatform.Toast("That player is already on the pitch", False)
 		RefreshProjected
 		FillSwapPickers
 		RefreshPickerButtons
@@ -994,11 +999,11 @@ Private Sub btnFair_Click
 	If duration <= 0 Then duration = 60
 	Dim lineup As Map = CurrentLineup
 	If lineup.Size = 0 Then
-		ToastMessageShow("Set a lineup first", False)
+		modPlatform.Toast("Set a lineup first", False)
 		Return
 	End If
 	If ConfirmedSquad.Size = 0 Then
-		ToastMessageShow("Confirm squad players first", False)
+		modPlatform.Toast("Confirm squad players first", False)
 		Return
 	End If
 	Dim targets As Map = PlayTargetsMap
@@ -1052,7 +1057,7 @@ Private Sub btnSave_Click
 	match.Put("subPlan", currentSubPlan)
 	modDb.SaveMatch(match)
 	modAppState.UpsertMatch(match)
-	ToastMessageShow("Sub plan saved", False)
+	modPlatform.Toast("Sub plan saved", False)
 End Sub
 
 Private Sub btnBack_Click
@@ -1112,7 +1117,7 @@ End Sub
 
 ' Hold one spot, then another, to exchange them. The marker's tag carries slotId and quarter.
 Private Sub pitchSlot_LongClick As Boolean
-	Dim hit As Panel = Sender
+	Dim hit As Panel = modUI.LongClickPanel(Sender)
 	If Not(hit.Tag Is Map) Then Return True
 	Dim info As Map = hit.Tag
 	Dim slotId As String = "" & info.GetDefault("slotId", "")
@@ -1121,19 +1126,19 @@ Private Sub pitchSlot_LongClick As Boolean
 	If holdSlotId = "" Or quarter <> holdQuarter Then
 		holdSlotId = slotId
 		holdQuarter = quarter
-		ToastMessageShow("Long-press another spot to swap", False)
+		modPlatform.Toast("Long-press another spot to swap", False)
 		CallSubDelayed(Me, "ShowPlan")
 		Return True
 	End If
 	If slotId = holdSlotId Then
 		holdSlotId = ""
 		holdQuarter = 0
-		ToastMessageShow("Swap cancelled", False)
+		modPlatform.Toast("Swap cancelled", False)
 		CallSubDelayed(Me, "ShowPlan")
 		Return True
 	End If
 	If SwapSlots(holdSlotId, slotId, quarter) = False Then
-		ToastMessageShow("Nothing to swap", False)
+		modPlatform.Toast("Nothing to swap", False)
 		Return True
 	End If
 	holdSlotId = ""
@@ -1159,7 +1164,7 @@ Private Sub SwapSlots(slotA As String, slotB As String, quarter As Int) As Boole
 		modSubPlanner.ExchangeSlots(lineup, slotA, slotB)
 		match.Put("lineup", lineup)
 		match.Put("tacticalLineup", lineup)
-		ToastMessageShow("Positions swapped", False)
+		modPlatform.Toast("Positions swapped", False)
 		Return True
 	End If
 	Dim names As Map = NameByIdMap
@@ -1174,7 +1179,7 @@ Private Sub SwapSlots(slotA As String, slotB As String, quarter As Int) As Boole
 	moves.Add(mv)
 	currentSubPlan.Put("moves", moves)
 	currentSubPlan.Put("autoGenerated", False)
-	ToastMessageShow("Positions swapped", False)
+	modPlatform.Toast("Positions swapped", False)
 	Return True
 End Sub
 

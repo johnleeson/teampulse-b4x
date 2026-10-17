@@ -1,4 +1,5 @@
 ﻿B4A=true
+B4i=true
 Group=Default Group
 ModulesStructureVersion=1
 Type=Class
@@ -42,33 +43,35 @@ Private Sub B4XPage_Appear
 End Sub
 
 Private Sub BuildUI
-	Dim chrome As Map = modUI.AddPageChrome(Root, "Statistics", "btnBack", "", "", True)
+	Dim chrome As Map = modUI.AddPageChrome(Me, Root, "Statistics", "btnBack", "", "", True)
 	Dim top As Int = chrome.Get("ContentTop")
-	Dim w As Int = Root.Width - 32dip
+	Dim w As Int = modUI.ViewWidth(Root) - 32dip
 	
-	btnClub.Initialize("btnClub")
+	modUI.InitButton(Me, btnClub, "btnClub")
 	StylePicker(btnClub)
 	Root.AddView(btnClub, 16dip, top, w, 44dip)
 	
-	btnMatch.Initialize("btnMatch")
+	modUI.InitButton(Me, btnMatch, "btnMatch")
 	StylePicker(btnMatch)
 	Root.AddView(btnMatch, 16dip, top + 52dip, w, 44dip)
 	
 	summaryBar.Initialize("")
 	summaryBar.Color = Colors.Transparent
-	Root.AddView(summaryBar, 12dip, top + 108dip, Root.Width - 24dip, 64dip)
+	Root.AddView(summaryBar, 12dip, top + 108dip, modUI.ViewWidth(Root) - 24dip, 64dip)
 	
 	Dim listTop As Int = top + 184dip
-	clv = modUI.AddCustomListViewThemed(Root, 0, listTop, Root.Width, Root.Height - listTop, Me, "clv", True)
+	clv = modUI.AddCustomListViewThemed(Root, 0, listTop, modUI.ViewWidth(Root), modUI.ViewHeight(Root) - listTop, Me, "clv", True)
 End Sub
 
 Private Sub StylePicker(b As Button)
 	b.Color = modConfig.COLOR_DARK_CARD
-	b.TextColor = modConfig.COLOR_DARK_TEXT
-	b.TextSize = 14
-	b.Typeface = Typeface.DEFAULT_BOLD
-	b.Gravity = Bit.Or(Gravity.CENTER_VERTICAL, Gravity.LEFT)
+	modUI.SetButtonTextColor(b, modConfig.COLOR_DARK_TEXT)
+	modUI.SetTextSize(b, 14)
+	modUI.SetBold(b, True)
+	modUI.SetAlign(b, "CENTER", "LEFT")
+#if B4A
 	b.Padding = Array As Int(14dip, 0, 14dip, 0)
+#End If
 End Sub
 
 Private Sub LoadClubs
@@ -130,8 +133,8 @@ Public Sub Refresh
 	summaryBar.RemoveAllViews
 	modUI.ApplyDarkListBackground(clv, modConfig.COLOR_DARK_BG)
 	If clubIds.Size = 0 Then
-		Dim empty As Panel = modUI.CreateSimpleRowThemed(Root.Width - 24dip, "Join a club to see statistics.", "", True)
-		empty.SetLayout(0, 0, Root.Width - 24dip, modUI.SimpleRowHeight)
+		Dim empty As Panel = modUI.CreateSimpleRowThemed(modUI.ViewWidth(Root) - 24dip, "Join a club to see statistics.", "", True)
+		modUI.PlaceView(empty, 0, 0, modUI.ViewWidth(Root) - 24dip, modUI.SimpleRowHeight)
 		clv.Add(empty, "")
 		Return
 	End If
@@ -141,7 +144,7 @@ Public Sub Refresh
 	If matchIds.Size > 0 Then mid = matchIds.Get(Max(0, selectedMatchIndex))
 	
 	Dim stats As Map = modStats.Compute(club, modAppState.Matches, modAppState.FeedEvents, mid)
-	Dim pillW As Int = (Root.Width - 24dip - 24dip) / 5
+	Dim pillW As Int = (modUI.ViewWidth(Root) - 24dip - 24dip) / 5
 	Dim gap As Int = 6dip
 	Dim x As Int = 0
 	AddPill(x, pillW, "P", "" & stats.GetDefault("played", 0), modConfig.COLOR_ACCENT)
@@ -162,7 +165,7 @@ Public Sub Refresh
 		players.Initialize
 	End If
 	
-	Dim cardW As Int = Root.Width - 24dip
+	Dim cardW As Int = modUI.ViewWidth(Root) - 24dip
 	AddLeaderboard(cardW, "GOALS", players, "goals", 10)
 	AddLeaderboard(cardW, "ASSISTS", players, "assists", 10)
 	AddLeaderboard(cardW, "POTM AWARDS", players, "potmWins", 10)
@@ -171,13 +174,13 @@ End Sub
 
 Private Sub AddLeaderboard(cardW As Int, title As String, players As List, field As String, maxRows As Int)
 	Dim hdr As Panel = modUI.CreateSectionHeaderThemed(cardW, title, True)
-	hdr.SetLayout(0, 0, cardW, modUI.SectionHeaderHeight)
+	modUI.PlaceView(hdr, 0, 0, cardW, modUI.SectionHeaderHeight)
 	clv.Add(hdr, "")
 	
 	Dim ranked As List = RankByField(players, field)
 	If ranked.Size = 0 Then
 		Dim none As Panel = modUI.CreateSimpleRowThemed(cardW, "No data yet", "", True)
-		none.SetLayout(0, 0, cardW, modUI.SimpleRowHeight)
+		modUI.PlaceView(none, 0, 0, cardW, modUI.SimpleRowHeight)
 		clv.Add(none, "")
 		Return
 	End If
@@ -195,7 +198,7 @@ Private Sub AddLeaderboard(cardW As Int, title As String, players As List, field
 			suffix = "" & val
 		End If
 		Dim row As Panel = modUI.CreateLeaderboardRow(cardW, i + 1, p.GetDefault("name", "?"), suffix, True)
-		row.SetLayout(0, 0, cardW, 48dip)
+		modUI.PlaceView(row, 0, 0, cardW, 48dip)
 		clv.Add(row, p.GetDefault("id", ""))
 	Next
 End Sub

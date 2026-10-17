@@ -1,4 +1,5 @@
 ﻿B4A=true
+B4i=true
 Group=Default Group
 ModulesStructureVersion=1
 Type=Class
@@ -69,50 +70,50 @@ Private Sub B4XPage_Appear
 End Sub
 
 Private Sub BuildUI
-	Dim chrome As Map = modUI.AddPageChrome(Root, "Training", "btnBack", "", "", True)
+	Dim chrome As Map = modUI.AddPageChrome(Me, Root, "Training", "btnBack", "", "", True)
 	Dim top As Int = chrome.Get("ContentTop")
 	
-	btnClub.Initialize("btnClub")
+	modUI.InitButton(Me, btnClub, "btnClub")
 	StylePickerButton(btnClub)
-	Root.AddView(btnClub, 16dip, top, Root.Width - 32dip, 44dip)
+	Root.AddView(btnClub, 16dip, top, modUI.ViewWidth(Root) - 32dip, 44dip)
 	
-	btnDate.Initialize("btnDate")
+	modUI.InitButton(Me, btnDate, "btnDate")
 	StylePickerButton(btnDate)
-	Root.AddView(btnDate, 16dip, top + 52dip, Root.Width - 32dip, 44dip)
+	Root.AddView(btnDate, 16dip, top + 52dip, modUI.ViewWidth(Root) - 32dip, 44dip)
 	
-	btnAttendance.Initialize("btnAttendance")
-	btnAwards.Initialize("btnAwards")
-	Dim modeW As Int = (Root.Width - 40dip) / 2
+	modUI.InitButton(Me, btnAttendance, "btnAttendance")
+	modUI.InitButton(Me, btnAwards, "btnAwards")
+	Dim modeW As Int = (modUI.ViewWidth(Root) - 40dip) / 2
 	Root.AddView(btnAttendance, 16dip, top + 104dip, modeW, 40dip)
 	Root.AddView(btnAwards, 24dip + modeW, top + 104dip, modeW, 40dip)
 	
 	lblHint.Initialize("")
-	lblHint.TextSize = 11
+	modUI.SetTextSize(lblHint, 11)
 	lblHint.TextColor = modConfig.COLOR_DARK_MUTED
-	Root.AddView(lblHint, 16dip, top + 148dip, Root.Width - 32dip, 18dip)
+	Root.AddView(lblHint, 16dip, top + 148dip, modUI.ViewWidth(Root) - 32dip, 18dip)
 	
 	lblSummary.Initialize("")
-	lblSummary.TextSize = 12
+	modUI.SetTextSize(lblSummary, 12)
 	lblSummary.TextColor = modConfig.COLOR_DARK_TEXT
-	lblSummary.Typeface = Typeface.DEFAULT_BOLD
-	Root.AddView(lblSummary, 16dip, top + 166dip, Root.Width - 32dip, 20dip)
+	modUI.SetBold(lblSummary, True)
+	Root.AddView(lblSummary, 16dip, top + 166dip, modUI.ViewWidth(Root) - 32dip, 20dip)
 	
-	clv = modUI.AddCustomListViewThemed(Root, 0, top + 190dip, Root.Width, 200dip, Me, "clv", True)
+	clv = modUI.AddCustomListViewThemed(Root, 0, top + 190dip, modUI.ViewWidth(Root), 200dip, Me, "clv", True)
 	
-	btnSave.Initialize("btnSave")
+	modUI.InitButton(Me, btnSave, "btnSave")
 	btnSave.Text = "Save session"
-	btnSave.TextColor = Colors.White
-	btnSave.TextSize = 15
-	btnSave.Typeface = Typeface.DEFAULT_BOLD
-	btnSave.Background = modUI.RoundedBg(modConfig.COLOR_ACCENT, 8dip)
-	Root.AddView(btnSave, 16dip, Root.Height - 60dip, Root.Width - 32dip, 48dip)
+	modUI.SetButtonTextColor(btnSave, Colors.White)
+	modUI.SetTextSize(btnSave, 15)
+	modUI.SetBold(btnSave, True)
+	modUI.RoundView(btnSave, modConfig.COLOR_ACCENT, 8dip)
+	Root.AddView(btnSave, 16dip, modUI.ViewHeight(Root) - 60dip, modUI.ViewWidth(Root) - 32dip, 48dip)
 	
-	btnDelete.Initialize("btnDelete")
+	modUI.InitButton(Me, btnDelete, "btnDelete")
 	btnDelete.Text = "Delete session"
-	btnDelete.TextColor = Colors.White
-	btnDelete.TextSize = 14
-	btnDelete.Background = modUI.RoundedBg(modConfig.COLOR_DANGER, 8dip)
-	Root.AddView(btnDelete, 16dip, Root.Height - 112dip, Root.Width - 32dip, 40dip)
+	modUI.SetButtonTextColor(btnDelete, Colors.White)
+	modUI.SetTextSize(btnDelete, 14)
+	modUI.RoundView(btnDelete, modConfig.COLOR_DANGER, 8dip)
+	Root.AddView(btnDelete, 16dip, modUI.ViewHeight(Root) - 112dip, modUI.ViewWidth(Root) - 32dip, 40dip)
 End Sub
 
 Private Sub LayoutBody
@@ -120,35 +121,35 @@ Private Sub LayoutBody
 	Dim y As Int = top
 	If clubIds.Size > 1 Then
 		btnClub.Visible = True
-		btnClub.SetLayout(16dip, y, Root.Width - 32dip, 44dip)
+		modUI.PlaceView(btnClub, 16dip, y, modUI.ViewWidth(Root) - 32dip, 44dip)
 		y = y + 52dip
 	Else
 		btnClub.Visible = False
 	End If
-	btnDate.SetLayout(16dip, y, Root.Width - 32dip, 44dip)
+	modUI.PlaceView(btnDate, 16dip, y, modUI.ViewWidth(Root) - 32dip, 44dip)
 	y = y + 52dip
-	Dim modeW As Int = (Root.Width - 40dip) / 2
-	btnAttendance.SetLayout(16dip, y, modeW, 40dip)
-	btnAwards.SetLayout(24dip + modeW, y, modeW, 40dip)
+	Dim modeW As Int = (modUI.ViewWidth(Root) - 40dip) / 2
+	modUI.PlaceView(btnAttendance, 16dip, y, modeW, 40dip)
+	modUI.PlaceView(btnAwards, 24dip + modeW, y, modeW, 40dip)
 	y = y + 46dip
-	lblHint.SetLayout(16dip, y, Root.Width - 32dip, 18dip)
+	modUI.PlaceView(lblHint, 16dip, y, modUI.ViewWidth(Root) - 32dip, 18dip)
 	y = y + 20dip
-	lblSummary.SetLayout(16dip, y, Root.Width - 32dip, 20dip)
+	modUI.PlaceView(lblSummary, 16dip, y, modUI.ViewWidth(Root) - 32dip, 20dip)
 	y = y + 24dip
 	
 	Dim bottom As Int = 16dip + 48dip
 	If editingExisting Then
 		btnDelete.Visible = True
-		btnDelete.SetLayout(16dip, Root.Height - 16dip - 48dip - 8dip - 40dip, Root.Width - 32dip, 40dip)
+		modUI.PlaceView(btnDelete, 16dip, modUI.ViewHeight(Root) - 16dip - 48dip - 8dip - 40dip, modUI.ViewWidth(Root) - 32dip, 40dip)
 		bottom = 16dip + 48dip + 8dip + 40dip
 	Else
 		btnDelete.Visible = False
 	End If
-	btnSave.SetLayout(16dip, Root.Height - 16dip - 48dip, Root.Width - 32dip, 48dip)
-	Dim listH As Int = Root.Height - bottom - y
+	modUI.PlaceView(btnSave, 16dip, modUI.ViewHeight(Root) - 16dip - 48dip, modUI.ViewWidth(Root) - 32dip, 48dip)
+	Dim listH As Int = modUI.ViewHeight(Root) - bottom - y
 	If listH < 80dip Then listH = 80dip
 	Dim listBase As B4XView = clv.GetBase
-	listBase.SetLayoutAnimated(0, 0, y, Root.Width, listH)
+	listBase.SetLayoutAnimated(0, 0, y, modUI.ViewWidth(Root), listH)
 End Sub
 
 Private Sub ResetNew
@@ -255,10 +256,10 @@ Private Sub RefreshList
 	modUI.ApplyDarkListBackground(clv, modConfig.COLOR_DARK_BG)
 	RefreshSummary
 	Dim members As List = CurrentMembers
-	Dim cardW As Int = Root.Width - 24dip
+	Dim cardW As Int = modUI.ViewWidth(Root) - 24dip
 	If members.Size = 0 Then
 		Dim empty As Panel = modUI.CreateSimpleRowThemed(cardW, "No players in this club yet.", "", True)
-		empty.SetLayout(0, 0, cardW, modUI.SimpleRowHeight)
+		modUI.PlaceView(empty, 0, 0, cardW, modUI.SimpleRowHeight)
 		clv.Add(empty, "")
 		Return
 	End If
@@ -280,7 +281,7 @@ Private Sub RefreshList
 		wrap.Initialize("")
 		wrap.Color = modConfig.COLOR_DARK_BG
 		wrap.AddView(row, 12dip, 4dip, cardW, rowH)
-		wrap.SetLayout(0, 0, Root.Width, h)
+		modUI.PlaceView(wrap, 0, 0, modUI.ViewWidth(Root), h)
 		clv.Add(wrap, id)
 	Next
 End Sub
@@ -300,24 +301,24 @@ Private Sub CreateAttendanceRow(Width As Int, member As Map) As Panel
 	Dim status As String = AttendanceOf(id)
 	Dim p As Panel
 	p.Initialize("")
-	p.Background = modUI.RoundedBg(modConfig.COLOR_DARK_CARD, 12dip)
+	modUI.RoundView(p, modConfig.COLOR_DARK_CARD, 12dip)
 	Dim lbl As Label
 	lbl.Initialize("")
 	lbl.Text = member.GetDefault("name", "Player")
-	lbl.TextSize = 15
+	modUI.SetTextSize(lbl, 15)
 	lbl.TextColor = modConfig.COLOR_DARK_TEXT
-	lbl.Typeface = Typeface.DEFAULT_BOLD
-	lbl.Gravity = Gravity.CENTER_VERTICAL
-	lbl.SingleLine = True
+	modUI.SetBold(lbl, True)
+	modUI.SetAlign(lbl, "CENTER", "LEFT")
+	modUI.SetSingleLine(lbl, True)
 	p.AddView(lbl, 14dip, 0, Width - 110dip, 56dip)
 	Dim chip As Label
 	chip.Initialize("")
 	chip.Text = AttendanceLabel(status)
-	chip.TextSize = 12
+	modUI.SetTextSize(chip, 12)
 	chip.TextColor = Colors.White
-	chip.Typeface = Typeface.DEFAULT_BOLD
-	chip.Gravity = Gravity.CENTER
-	chip.Background = modUI.RoundedBg(AttendanceColor(status), 10dip)
+	modUI.SetBold(chip, True)
+	modUI.SetAlign(chip, "CENTER", "CENTER")
+	modUI.RoundView(chip, AttendanceColor(status), 10dip)
 	p.AddView(chip, Width - 92dip, 14dip, 78dip, 28dip)
 	Return p
 End Sub
@@ -326,15 +327,15 @@ Private Sub CreateAwardsRow(Width As Int, member As Map) As Panel
 	Dim id As String = member.GetDefault("id", "")
 	Dim p As Panel
 	p.Initialize("")
-	p.Background = modUI.RoundedBg(modConfig.COLOR_DARK_CARD, 12dip)
+	modUI.RoundView(p, modConfig.COLOR_DARK_CARD, 12dip)
 	Dim lbl As Label
 	lbl.Initialize("")
 	lbl.Text = member.GetDefault("name", "Player")
-	lbl.TextSize = 14
+	modUI.SetTextSize(lbl, 14)
 	lbl.TextColor = modConfig.COLOR_DARK_TEXT
-	lbl.Typeface = Typeface.DEFAULT_BOLD
-	lbl.Gravity = Gravity.CENTER_VERTICAL
-	lbl.SingleLine = True
+	modUI.SetBold(lbl, True)
+	modUI.SetAlign(lbl, "CENTER", "LEFT")
+	modUI.SetSingleLine(lbl, True)
 	Dim btnW As Int = 68dip
 	If Width < 320dip Then btnW = 58dip
 	Dim gap As Int = 6dip
@@ -351,18 +352,18 @@ End Sub
 
 Private Sub AwardButton(eventName As String, text As String, playerId As String, selected As Boolean, onColor As Int) As Button
 	Dim b As Button
-	b.Initialize(eventName)
+	modUI.InitButton(Me, b, eventName)
 	b.Text = text
-	b.TextSize = 11
-	b.Typeface = Typeface.DEFAULT_BOLD
-	b.Gravity = Gravity.CENTER
+	modUI.SetTextSize(b, 11)
+	modUI.SetBold(b, True)
+	modUI.SetAlign(b, "CENTER", "CENTER")
 	b.Tag = playerId
 	If selected Then
-		b.Background = modUI.RoundedBg(onColor, 8dip)
-		b.TextColor = Colors.White
+		modUI.RoundView(b, onColor, 8dip)
+		modUI.SetButtonTextColor(b, Colors.White)
 	Else
-		b.Background = modUI.RoundedBg(modConfig.COLOR_DARK_CHIP, 8dip)
-		b.TextColor = modConfig.COLOR_DARK_MUTED
+		modUI.RoundView(b, modConfig.COLOR_DARK_CHIP, 8dip)
+		modUI.SetButtonTextColor(b, modConfig.COLOR_DARK_MUTED)
 	End If
 	Return b
 End Sub
@@ -405,7 +406,7 @@ Private Sub clv_ItemClick (Index As Int, Value As Object)
 End Sub
 
 Private Sub btnTrainer_Click
-	Dim b As Button = Sender
+	Dim b As Button = modUI.ClickedButton(Sender)
 	Dim id As String = b.Tag
 	If trainerId = id Then
 		trainerId = ""
@@ -416,7 +417,7 @@ Private Sub btnTrainer_Click
 End Sub
 
 Private Sub btnGood_Click
-	Dim b As Button = Sender
+	Dim b As Button = modUI.ClickedButton(Sender)
 	Dim id As String = b.Tag
 	If IdIn(wellIds, id) Then
 		RemoveId(wellIds, id)
@@ -428,7 +429,7 @@ Private Sub btnGood_Click
 End Sub
 
 Private Sub btnPoor_Click
-	Dim b As Button = Sender
+	Dim b As Button = modUI.ClickedButton(Sender)
 	Dim id As String = b.Tag
 	If IdIn(poorIds, id) Then
 		RemoveId(poorIds, id)
@@ -453,7 +454,7 @@ End Sub
 
 Private Sub btnClub_Click
 	If clubNames.Size = 0 Then
-		ToastMessageShow("Create or join a club first", False)
+		modPlatform.Toast("Create or join a club first", False)
 		Return
 	End If
 	StyleDarkDialog
@@ -581,23 +582,25 @@ End Sub
 
 Private Sub StylePickerButton(b As Button)
 	b.Color = modConfig.COLOR_DARK_CARD
-	b.TextColor = modConfig.COLOR_DARK_TEXT
-	b.TextSize = 15
-	b.Gravity = Bit.Or(Gravity.CENTER_VERTICAL, Gravity.LEFT)
+	modUI.SetButtonTextColor(b, modConfig.COLOR_DARK_TEXT)
+	modUI.SetTextSize(b, 15)
+	modUI.SetAlign(b, "CENTER", "LEFT")
+#if B4A
 	b.Padding = Array As Int(14dip, 0, 14dip, 0)
+#End If
 End Sub
 
 Private Sub StyleToggle(b As Button, selected As Boolean)
 	If selected Then
 		b.Color = modConfig.COLOR_ACCENT
-		b.TextColor = Colors.White
+		modUI.SetButtonTextColor(b, Colors.White)
 	Else
 		b.Color = modConfig.COLOR_DARK_CARD
-		b.TextColor = modConfig.COLOR_DARK_MUTED
+		modUI.SetButtonTextColor(b, modConfig.COLOR_DARK_MUTED)
 	End If
-	b.TextSize = 13
-	b.Typeface = Typeface.DEFAULT_BOLD
-	b.Gravity = Gravity.CENTER
+	modUI.SetTextSize(b, 13)
+	modUI.SetBold(b, True)
+	modUI.SetAlign(b, "CENTER", "CENTER")
 End Sub
 
 Private Sub StyleDarkDialog

@@ -1,4 +1,5 @@
 ﻿B4A=true
+B4i=true
 Group=Default Group
 ModulesStructureVersion=1
 Type=StaticCode
@@ -41,7 +42,8 @@ End Sub
 
 Public Sub IsOwnGoal(details As Map) As Boolean
 	If details.IsInitialized = False Then Return False
-	Dim s As String = ("" & details.GetDefault("ownGoal", False)).ToLowerCase
+	Dim s As String = "" & details.GetDefault("ownGoal", False)
+	s = s.ToLowerCase
 	Return s = "true" Or s = "1"
 End Sub
 
@@ -54,9 +56,8 @@ Public Sub HasPending(matchId As String) As Boolean
 	Initialize
 	If matchId = "" Then Return dirtyEvents.Size > 0 Or dirtyMatches.Size > 0
 	If dirtyMatches.ContainsKey(matchId) Then Return True
-	Dim i As Int
-	For i = 0 To dirtyEvents.Size - 1
-		Dim row As Map = dirtyEvents.GetValueAt(i)
+	For Each rowObj As Object In dirtyEvents.Values
+		Dim row As Map = rowObj
 		If row.GetDefault("matchId", "") = matchId Then Return True
 	Next
 	Return False
@@ -143,6 +144,280 @@ Public Sub CountScores(matchId As String) As Map
 	Return m
 End Sub
 
+Public Sub AsLong(v As Object) As Long
+	If v = Null Then Return 0
+	Try
+		Dim n As Long = v
+		Return n
+	Catch
+		Try
+			Dim d As Double = v
+			Return d
+		Catch
+			Return 0
+		End Try
+	End Try
+End Sub
+
+Public Sub IsFlag(details As Map, key As String) As Boolean
+	If details.IsInitialized = False Then Return False
+	Dim s As String = "" & details.GetDefault(key, False)
+	s = s.ToLowerCase
+	Return s = "true" Or s = "1"
+End Sub
+
+Public Sub HasFullTime(matchId As String) As Boolean
+	Dim events As List = modAppState.EventsForMatch(matchId)
+	Dim i As Int
+	For i = 0 To events.Size - 1
+		Dim e As Map = events.Get(i)
+		If e.GetDefault("type", "") = "END" Then Return True
+	Next
+	Return False
+End Sub
+
+Public Sub ShootoutKickContent(team As String, scored As Boolean, playerName As String) As String
+	If team = "B" Then
+		If scored Then Return "Opposition scored"
+		Return "Opposition missed"
+	End If
+	Dim verb As String = "Missed"
+	If scored Then verb = "Scored"
+	If playerName = "" Then playerName = "?"
+	Return verb & " · " & playerName
+End Sub
+
+Public Sub ShootoutSetupContent(kicksEach As Int, firstTeam As String) As String
+	Dim who As String = "We start"
+	If firstTeam = "B" Then who = "Opposition start"
+	Return kicksEach & " each · " & who
+End Sub
+
+' Regulation score, plus pens when a shootout has been set up.
+' Won and Lost are from our side (team A), and only once the shootout is decided.
+Public Sub ScoreLine(match As Map) As String
+	Dim a As Int = AsInt(match.GetDefault("scoreA", 0))
+	Dim b As Int = AsInt(match.GetDefault("scoreB", 0))
+	Dim base As String = a & " - " & b
+	Dim st As Map = ShootoutState(match.GetDefault("id", ""))
+	If IsFlag(st, "active") = False Then Return base
+	Dim line As String = base & " (" & AsInt(st.GetDefault("pensA", 0)) & "-" & AsInt(st.GetDefault("pensB", 0)) & " pens)"
+	If IsFlag(st, "decided") Then
+		If st.GetDefault("winner", "") = "A" Then
+			line = line & " · Won"
+		Else
+			line = line & " · Lost"
+		End If
+	End If
+	Return line
+End Sub
+
+' Clock-line text once a shootout exists. Empty when there is no setup.
+Public Sub PensStatusLine(matchId As String) As String
+	Dim st As Map = ShootoutState(matchId)
+	If IsFlag(st, "active") = False Then Return ""
+	Dim line As String = "Pens " & AsInt(st.GetDefault("pensA", 0)) & "-" & AsInt(st.GetDefault("pensB", 0))
+	If IsFlag(st, "decided") Then
+		If st.GetDefault("winner", "") = "A" Then
+			line = line & " · Won"
+		Else
+			line = line & " · Lost"
+		End If
+	Else If IsFlag(st, "inSuddenDeath") Then
+		line = line & " · Sudden death"
+	End If
+	Return line
+End Sub
+
+' active, decided, winner (A/B), pensA, pensB, kicksEach, firstTeam, nextTeam, inSuddenDeath.
+' Kicks do not change scoreA/scoreB. A winner exists only when the other side cannot catch up,
+' or a sudden-death pair has finished with the scores different.
+Public Sub ShootoutState(matchId As String) As Map
+	Dim out As Map
+	out.Initialize
+	out.Put("active", False)
+	out.Put("decided", False)
+	out.Put("winner", "")
+	out.Put("pensA", 0)
+	out.Put("pensB", 0)
+	out.Put("kicksEach", 0)
+	out.Put("firstTeam", "A")
+	out.Put("nextTeam", "")
+	out.Put("inSuddenDeath", False)
+	out.Put("takenA", 0)
+	out.Put("takenB", 0)
+	If matchId = "" Then Return out
+	
+	Dim events As List = modAppState.EventsForMatch(matchId)
+	Dim setup As Map
+	setup.Initialize
+	Dim haveSetup As Boolean
+	Dim kicks As List
+	kicks.Initialize
+	Dim i As Int
+	For i = 0 To events.Size - 1
+		Dim e As Map = events.Get(i)
+		If e.GetDefault("type", "") <> "SHOOTOUT" Then Continue
+		Dim details As Map = DetailsOf(e)
+		If details.GetDefault("kind", "") = "setup" Then
+			If haveSetup = False Or EventSeq(e) >= EventSeq(setup) Then
+				setup = e
+				haveSetup = True
+			End If
+		Else
+			kicks.Add(e)
+		End If
+	Next
+	If haveSetup = False Then Return out
+	
+	Dim setupDetails As Map = DetailsOf(setup)
+	Dim n As Int = AsInt(setupDetails.GetDefault("kicksEach", 5))
+	If n < 1 Then n = 1
+	Dim firstTeam As String = "" & setupDetails.GetDefault("firstTeam", "A")
+	If firstTeam <> "B" Then firstTeam = "A"
+	SortShootoutKicks(kicks)
+	
+	Dim takenA As Int
+	Dim takenB As Int
+	Dim scoredA As Int
+	Dim scoredB As Int
+	For i = 0 To kicks.Size - 1
+		Dim kick As Map = kicks.Get(i)
+		Dim kd As Map = DetailsOf(kick)
+		If kd.GetDefault("team", "A") = "B" Then
+			takenB = takenB + 1
+			If IsFlag(kd, "scored") Then scoredB = scoredB + 1
+		Else
+			takenA = takenA + 1
+			If IsFlag(kd, "scored") Then scoredA = scoredA + 1
+		End If
+	Next
+	
+	Dim outcome As Map = ShootoutOutcome(n, takenA, takenB, scoredA, scoredB)
+	Dim decided As Boolean = outcome.Get("decided")
+	Dim winner As String = outcome.Get("winner")
+	Dim inSuddenDeath As Boolean = outcome.Get("inSuddenDeath")
+	
+	out.Put("active", True)
+	out.Put("decided", decided)
+	out.Put("winner", winner)
+	out.Put("pensA", scoredA)
+	out.Put("pensB", scoredB)
+	out.Put("kicksEach", n)
+	out.Put("firstTeam", firstTeam)
+	out.Put("inSuddenDeath", inSuddenDeath)
+	out.Put("takenA", takenA)
+	out.Put("takenB", takenB)
+	If decided = False Then
+		Dim nextTeam As String = firstTeam
+		If takenA < takenB Then
+			nextTeam = "A"
+		Else If takenB < takenA Then
+			nextTeam = "B"
+		End If
+		out.Put("nextTeam", nextTeam)
+	End If
+	Return out
+End Sub
+
+' Rewrites suddenDeath on logged kicks so a deleted kick does not leave later cards wrong.
+' Returns True when an event was updated.
+Public Sub SyncShootoutFlags(matchId As String) As Boolean
+	Dim st As Map = ShootoutState(matchId)
+	If IsFlag(st, "active") = False Then Return False
+	Dim n As Int = AsInt(st.GetDefault("kicksEach", 0))
+	Dim events As List = modAppState.EventsForMatch(matchId)
+	Dim kicks As List
+	kicks.Initialize
+	Dim i As Int
+	For i = 0 To events.Size - 1
+		Dim e As Map = events.Get(i)
+		If e.GetDefault("type", "") <> "SHOOTOUT" Then Continue
+		Dim details As Map = DetailsOf(e)
+		If details.GetDefault("kind", "") = "setup" Then Continue
+		kicks.Add(e)
+	Next
+	SortShootoutKicks(kicks)
+	Dim takenA As Int
+	Dim takenB As Int
+	Dim changed As Boolean
+	For i = 0 To kicks.Size - 1
+		Dim kick As Map = kicks.Get(i)
+		Dim kd As Map = DetailsOf(kick)
+		Dim sd As Boolean = (takenA >= n And takenB >= n)
+		If IsFlag(kd, "suddenDeath") <> sd Then
+			kd.Put("suddenDeath", sd)
+			kick.Put("details", kd)
+			QueueEventUpsert(kick)
+			changed = True
+		End If
+		If kd.GetDefault("team", "A") = "B" Then
+			takenB = takenB + 1
+		Else
+			takenA = takenA + 1
+		End If
+	Next
+	Return changed
+End Sub
+
+Private Sub ShootoutOutcome(kicksEach As Int, takenA As Int, takenB As Int, scoredA As Int, scoredB As Int) As Map
+	Dim decided As Boolean
+	Dim winner As String
+	Dim inSuddenDeath As Boolean
+	If takenA < kicksEach Or takenB < kicksEach Then
+		Dim remA As Int = kicksEach - takenA
+		If remA < 0 Then remA = 0
+		Dim remB As Int = kicksEach - takenB
+		If remB < 0 Then remB = 0
+		If scoredA > scoredB + remB Then
+			decided = True
+			winner = "A"
+		Else If scoredB > scoredA + remA Then
+			decided = True
+			winner = "B"
+		End If
+	Else If takenA = takenB Then
+		If scoredA > scoredB Then
+			decided = True
+			winner = "A"
+		Else If scoredB > scoredA Then
+			decided = True
+			winner = "B"
+		Else
+			inSuddenDeath = True
+		End If
+	Else
+		inSuddenDeath = True
+	End If
+	Dim m As Map
+	m.Initialize
+	m.Put("decided", decided)
+	m.Put("winner", winner)
+	m.Put("inSuddenDeath", inSuddenDeath)
+	Return m
+End Sub
+
+Private Sub SortShootoutKicks(kicks As List)
+	Dim a As Int
+	For a = 0 To kicks.Size - 2
+		Dim b As Int
+		For b = a + 1 To kicks.Size - 1
+			Dim ea As Map = kicks.Get(a)
+			Dim eb As Map = kicks.Get(b)
+			If EventSeq(ea) > EventSeq(eb) Then
+				kicks.Set(a, eb)
+				kicks.Set(b, ea)
+			End If
+		Next
+	Next
+End Sub
+
+Private Sub EventSeq(ev As Map) As Long
+	Dim details As Map = DetailsOf(ev)
+	If details.ContainsKey("seq") Then Return AsLong(details.Get("seq"))
+	Return AsLong(ev.GetDefault("timestamp", 0))
+End Sub
+
 Public Sub QueueEventUpsert(ev As Map)
 	Initialize
 	If ev.IsInitialized = False Or ev.ContainsKey("id") = False Then Return
@@ -209,12 +484,11 @@ Public Sub ForgetMatch(matchId As String)
 	dirtyMatches.Remove(matchId)
 	Dim drop As List
 	drop.Initialize
-	Dim i As Int
-	For i = 0 To dirtyEvents.Size - 1
-		Dim eventId As String = dirtyEvents.GetKeyAt(i)
-		Dim row As Map = dirtyEvents.GetValueAt(i)
+	For Each eventId As String In dirtyEvents.Keys
+		Dim row As Map = dirtyEvents.Get(eventId)
 		If row.GetDefault("matchId", "") = matchId Then drop.Add(eventId)
 	Next
+	Dim i As Int
 	For i = 0 To drop.Size - 1
 		Dim id As String = drop.Get(i)
 		dirtyEvents.Remove(id)
@@ -230,11 +504,11 @@ Public Sub NextEventSend As Map
 	empty.Initialize
 	Dim ids As List
 	ids.Initialize
-	Dim i As Int
-	For i = 0 To dirtyEvents.Size - 1
-		ids.Add(dirtyEvents.GetKeyAt(i))
+	For Each eventId As String In dirtyEvents.Keys
+		ids.Add(eventId)
 	Next
 	Dim dropped As Boolean = False
+	Dim i As Int
 	For i = 0 To ids.Size - 1
 		Dim eventId As String = ids.Get(i)
 		If dirtyEvents.ContainsKey(eventId) Then
@@ -269,7 +543,12 @@ Public Sub NextMatchSend As Map
 	Dim empty As Map
 	empty.Initialize
 	If dirtyMatches.Size = 0 Then Return empty
-	Dim matchId As String = dirtyMatches.GetKeyAt(0)
+	Dim matchId As String = ""
+	For Each matchKey As String In dirtyMatches.Keys
+		matchId = matchKey
+		Exit
+	Next
+	If matchId = "" Then Return empty
 	Dim rev As Int = AsInt(dirtyMatches.Get(matchId))
 	Dim match As Map = modAppState.FindMatch(matchId)
 	If match.IsInitialized = False Or match.ContainsKey("id") = False Then
@@ -337,8 +616,7 @@ Public Sub PreferDirtyMatches(serverMatches As List) As List
 			End If
 		Next
 	End If
-	For i = 0 To dirtyMatches.Size - 1
-		Dim did As String = dirtyMatches.GetKeyAt(i)
+	For Each did As String In dirtyMatches.Keys
 		If seen.ContainsKey(did) Then Continue
 		If local.ContainsKey(did) Then out.Add(local.Get(did))
 	Next
@@ -378,8 +656,7 @@ Public Sub PreferDirtyEvents(serverEvents As List) As List
 			End If
 		Next
 	End If
-	For i = 0 To dirtyEvents.Size - 1
-		Dim did As String = dirtyEvents.GetKeyAt(i)
+	For Each did As String In dirtyEvents.Keys
 		If seen.ContainsKey(did) Then Continue
 		Dim drow As Map = dirtyEvents.Get(did)
 		If drow.GetDefault("op", "") = "delete" Then Continue
@@ -400,8 +677,8 @@ End Sub
 Public Sub LoadSnapshot
 	Initialize
 	Try
-		If File.Exists(File.DirInternal, CACHE_FILE) = False Then Return
-		Dim raw As String = File.ReadString(File.DirInternal, CACHE_FILE)
+		If File.Exists(modPlatform.AppDir, CACHE_FILE) = False Then Return
+		Dim raw As String = File.ReadString(modPlatform.AppDir, CACHE_FILE)
 		If raw.Length = 0 Then Return
 		Dim jp As JSONParser
 		jp.Initialize(raw)
@@ -435,9 +712,11 @@ Public Sub PersistSnapshot
 		root.Put("ackedEvents", ackedEvents)
 		root.Put("selectedMatchId", modAppState.SelectedMatchId)
 		root.Put("selectedClubId", modAppState.SelectedClubId)
-		Dim jg As JSONGenerator
-		jg.Initialize(root)
-		File.WriteString(File.DirInternal, CACHE_FILE, jg.ToString)
+		Dim json As String = modPlatform.JsonString(root)
+		Dim dir As String = modPlatform.AppDir
+		Dim tmp As String = CACHE_FILE & ".tmp"
+		File.WriteString(dir, tmp, json)
+		modPlatform.ReplaceFile(dir, tmp, CACHE_FILE)
 	Catch
 		Log("PersistSnapshot: " & LastException)
 	End Try

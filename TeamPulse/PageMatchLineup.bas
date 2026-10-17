@@ -1,4 +1,5 @@
 ﻿B4A=true
+B4i=true
 Group=Default Group
 ModulesStructureVersion=1
 Type=Class
@@ -51,35 +52,35 @@ Private Sub B4XPage_Appear
 End Sub
 
 Private Sub BuildUI
-	Dim chrome As Map = modUI.AddPageChrome(Root, "Lineup", "btnBack", "btnSave", "✓", True)
+	Dim chrome As Map = modUI.AddPageChrome(Me, Root, "Lineup", "btnBack", "btnSave", "✓", True)
 	Dim top As Int = chrome.Get("ContentTop")
 	
 	Dim pad As Int = 12dip
 	Dim gap As Int = 8dip
 	Dim sizeW As Int = 100dip
-	btnTeamSize.Initialize("btnTeamSize")
+	modUI.InitButton(Me, btnTeamSize, "btnTeamSize")
 	StylePickerButton(btnTeamSize)
 	Root.AddView(btnTeamSize, pad, top, sizeW, 44dip)
 	
-	btnFormation.Initialize("btnFormation")
+	modUI.InitButton(Me, btnFormation, "btnFormation")
 	StylePickerButton(btnFormation)
-	Root.AddView(btnFormation, pad + sizeW + gap, top, Root.Width - pad * 2 - sizeW - gap, 44dip)
+	Root.AddView(btnFormation, pad + sizeW + gap, top, modUI.ViewWidth(Root) - pad * 2 - sizeW - gap, 44dip)
 	
 	pitchTop = top + 56dip
-	pitchH = Min(Root.Height * 0.50, Root.Width * 1.05)
+	pitchH = Min(modUI.ViewHeight(Root) * 0.50, modUI.ViewWidth(Root) * 1.05)
 	pitch.Initialize("")
 	pitch.Color = 0xFF15803D
-	Root.AddView(pitch, pad, pitchTop, Root.Width - pad * 2, pitchH)
+	Root.AddView(pitch, pad, pitchTop, modUI.ViewWidth(Root) - pad * 2, pitchH)
 	
 	lblPick.Initialize("")
 	lblPick.Text = LineupHint
-	lblPick.TextSize = 11
+	modUI.SetTextSize(lblPick, 11)
 	lblPick.TextColor = modConfig.COLOR_DARK_MUTED
-	lblPick.SingleLine = False
-	Root.AddView(lblPick, 16dip, pitchTop + pitchH + 6dip, Root.Width - 32dip, 40dip)
+	modUI.SetSingleLine(lblPick, False)
+	Root.AddView(lblPick, 16dip, pitchTop + pitchH + 6dip, modUI.ViewWidth(Root) - 32dip, 40dip)
 	
 	Dim listTop As Int = pitchTop + pitchH + 50dip
-	clvPick = modUI.AddCustomListViewThemed(Root, 0, listTop, Root.Width, Root.Height - listTop, Me, "clvPick", True)
+	clvPick = modUI.AddCustomListViewThemed(Root, 0, listTop, modUI.ViewWidth(Root), modUI.ViewHeight(Root) - listTop, Me, "clvPick", True)
 	Try
 		clvPick.AsView.Visible = False
 	Catch
@@ -89,10 +90,10 @@ End Sub
 
 Private Sub StylePickerButton(b As Button)
 	b.Color = modConfig.COLOR_DARK_CARD
-	b.TextColor = modConfig.COLOR_DARK_TEXT
-	b.TextSize = 14
-	b.Typeface = Typeface.DEFAULT_BOLD
-	b.Gravity = Gravity.CENTER
+	modUI.SetButtonTextColor(b, modConfig.COLOR_DARK_TEXT)
+	modUI.SetTextSize(b, 14)
+	modUI.SetBold(b, True)
+	modUI.SetAlign(b, "CENTER", "CENTER")
 End Sub
 
 Private Sub Load
@@ -247,9 +248,7 @@ Private Sub DrawPitch
 End Sub
 
 Private Sub DrawPitchMarkings
-	Dim cd As ColorDrawable
-	cd.Initialize2(0xFF15803D, 14dip, 3dip, Colors.ARGB(180, 22, 101, 52))
-	pitch.Background = cd
+	modUI.RoundBorder(pitch, 0xFF15803D, 14dip, 3dip, Colors.ARGB(180, 22, 101, 52))
 	pitch.Color = 0xFF15803D
 	modUI.PaintPitchMarkings(pitch)
 End Sub
@@ -259,14 +258,15 @@ Private Sub CreateRoundSlot(posId As String, label As String, playerId As String
 	wrap.Initialize("pos")
 	wrap.Color = Colors.Transparent
 	wrap.Tag = posId
+	modUI.EnableLongClick(wrap, Me, "pos")
 	
 	Dim circle As Panel
 	circle.Initialize("")
 	Dim filled As Boolean = playerId <> ""
 	If filled Then
-		circle.Background = modUI.RoundedBg(0xFF0F172A, SlotSize / 2)
+		modUI.RoundView(circle, 0xFF0F172A, SlotSize / 2)
 	Else
-		circle.Background = modUI.RoundedBg(Colors.ARGB(70, 0, 0, 0), SlotSize / 2)
+		modUI.RoundView(circle, Colors.ARGB(70, 0, 0, 0), SlotSize / 2)
 	End If
 	wrap.AddView(circle, 0, 0, SlotSize, SlotSize)
 	modUI.ClipToOutline(circle)
@@ -274,7 +274,6 @@ Private Sub CreateRoundSlot(posId As String, label As String, playerId As String
 	' Border ring
 	Dim ring As Panel
 	ring.Initialize("")
-	Dim ringCd As ColorDrawable
 	Dim ringCol As Int = Colors.White
 	Dim ringW As Int = 2dip
 	If posId = holdPosId And holdPosId <> "" Then
@@ -283,8 +282,7 @@ Private Sub CreateRoundSlot(posId As String, label As String, playerId As String
 	Else If filled = False Then
 		ringCol = Colors.ARGB(180, 255, 255, 255)
 	End If
-	ringCd.Initialize2(Colors.Transparent, SlotSize / 2, ringW, ringCol)
-	ring.Background = ringCd
+	modUI.RoundBorder(ring, Colors.Transparent, SlotSize / 2, ringW, ringCol)
 	wrap.AddView(ring, 0, 0, SlotSize, SlotSize)
 	
 	If filled Then
@@ -292,17 +290,17 @@ Private Sub CreateRoundSlot(posId As String, label As String, playerId As String
 		Dim initials As Label
 		initials.Initialize("")
 		initials.Text = modUI.PlayerInitials(nm)
-		initials.TextSize = 13
+		modUI.SetTextSize(initials, 13)
 		initials.TextColor = Colors.White
-		initials.Typeface = Typeface.DEFAULT_BOLD
-		initials.Gravity = Gravity.CENTER
+		modUI.SetBold(initials, True)
+		modUI.SetAlign(initials, "CENTER", "CENTER")
 		circle.AddView(initials, 0, 0, SlotSize, SlotSize)
 		
 		Dim avUrl As String = avatarById.GetDefault(playerId, "")
 		If avUrl <> "" Then
 			Dim iv As ImageView
 			iv.Initialize("")
-			iv.Gravity = Gravity.FILL
+			modUI.SetImageFill(iv)
 			circle.AddView(iv, 0, 0, SlotSize, SlotSize)
 			LoadSlotAvatar(iv, avUrl)
 		End If
@@ -310,20 +308,20 @@ Private Sub CreateRoundSlot(posId As String, label As String, playerId As String
 		Dim lblName As Label
 		lblName.Initialize("")
 		lblName.Text = FirstName(nm)
-		lblName.TextSize = 9
+		modUI.SetTextSize(lblName, 9)
 		lblName.TextColor = Colors.White
-		lblName.Typeface = Typeface.DEFAULT_BOLD
-		lblName.Gravity = Gravity.CENTER
-		lblName.SingleLine = True
+		modUI.SetBold(lblName, True)
+		modUI.SetAlign(lblName, "CENTER", "CENTER")
+		modUI.SetSingleLine(lblName, True)
 		wrap.AddView(lblName, -8dip, SlotSize + 1dip, SlotSize + 16dip, 14dip)
 	Else
 		Dim lblPos As Label
 		lblPos.Initialize("")
 		lblPos.Text = label
-		lblPos.TextSize = 10
+		modUI.SetTextSize(lblPos, 10)
 		lblPos.TextColor = Colors.ARGB(230, 255, 255, 255)
-		lblPos.Typeface = Typeface.DEFAULT_BOLD
-		lblPos.Gravity = Gravity.CENTER
+		modUI.SetBold(lblPos, True)
+		modUI.SetAlign(lblPos, "CENTER", "CENTER")
 		circle.AddView(lblPos, 0, 0, SlotSize, SlotSize)
 	End If
 	Return wrap
@@ -346,7 +344,7 @@ Private Sub LoadSlotAvatar(iv As ImageView, url As String)
 			Dim bmp As Bitmap = job.GetBitmap
 			If bmp <> Null And bmp.IsInitialized Then
 				iv.Bitmap = bmp
-				iv.Gravity = Gravity.FILL
+				modUI.SetImageFill(iv)
 			End If
 		Catch
 			Log(LastException.Message)
@@ -396,25 +394,25 @@ End Sub
 
 ' Hold one spot, then another, to exchange them. Tap still assigns or clears.
 Private Sub pos_LongClick As Boolean
-	Dim wrap As Panel = Sender
+	Dim wrap As Panel = modUI.LongClickPanel(Sender)
 	Dim posId As String = "" & wrap.Tag
 	If posId = "" Then Return True
 	If holdPosId = "" Then
 		holdPosId = posId
-		ToastMessageShow("Long-press another spot to swap", False)
+		modPlatform.Toast("Long-press another spot to swap", False)
 		CallSubDelayed(Me, "DrawPitch")
 		Return True
 	End If
 	If posId = holdPosId Then
 		holdPosId = ""
-		ToastMessageShow("Swap cancelled", False)
+		modPlatform.Toast("Swap cancelled", False)
 		CallSubDelayed(Me, "DrawPitch")
 		Return True
 	End If
 	Dim idA As String = "" & tacticalLineup.GetDefault(holdPosId, "")
 	Dim idB As String = "" & tacticalLineup.GetDefault(posId, "")
 	If (idA = "" Or idA = "null") And (idB = "" Or idB = "null") Then
-		ToastMessageShow("Nothing to swap", False)
+		modPlatform.Toast("Nothing to swap", False)
 		Return True
 	End If
 	modSubPlanner.ExchangeSlots(tacticalLineup, holdPosId, posId)
@@ -422,7 +420,7 @@ Private Sub pos_LongClick As Boolean
 	match.Put("tacticalLineup", tacticalLineup)
 	holdPosId = ""
 	HidePicker
-	ToastMessageShow("Positions swapped", False)
+	modPlatform.Toast("Positions swapped", False)
 	CallSubDelayed(Me, "DrawPitch")
 	Return True
 End Sub
@@ -456,7 +454,7 @@ Private Sub ShowPicker
 	For Each k As String In tacticalLineup.Keys
 		used.Put(tacticalLineup.Get(k), True)
 	Next
-	Dim cardW As Int = Root.Width - 24dip
+	Dim cardW As Int = modUI.ViewWidth(Root) - 24dip
 	Dim any As Boolean = False
 	Dim i As Int
 	For i = 0 To members.Size - 1
@@ -466,7 +464,7 @@ Private Sub ShowPicker
 			any = True
 			Dim card As Panel = modUI.CreatePlayerCard(cardW, mem, "CONFIRMED", False)
 			Dim h As Int = modUI.PlayerCardHeight + 8dip
-			card.SetLayout(0, 0, cardW, h)
+			modUI.PlaceView(card, 0, 0, cardW, h)
 			clvPick.Add(card, id)
 			Dim iv As ImageView = modUI.PlayerCardImageView(card)
 			If iv.IsInitialized Then
@@ -478,7 +476,7 @@ Private Sub ShowPicker
 	Next
 	If any = False Then
 		Dim empty As Panel = modUI.CreateSimpleRow(cardW, "No free confirmed players. Update Squad first.", "")
-		empty.SetLayout(0, 0, cardW, modUI.SimpleRowHeight)
+		modUI.PlaceView(empty, 0, 0, cardW, modUI.SimpleRowHeight)
 		clvPick.Add(empty, "")
 	End If
 End Sub
@@ -493,7 +491,7 @@ Private Sub LoadAvatar(iv As ImageView, url As String)
 			Dim bmp As Bitmap = job.GetBitmap
 			If bmp <> Null And bmp.IsInitialized Then
 				iv.Bitmap = bmp
-				iv.Gravity = Gravity.FILL
+				modUI.SetImageFill(iv)
 			End If
 		Catch
 			Log("Lineup LoadAvatar: " & LastException.Message)
@@ -522,7 +520,7 @@ End Sub
 
 Private Sub btnSave_Click
 	PersistLineup
-	ToastMessageShow("Lineup saved", False)
+	modPlatform.Toast("Lineup saved", False)
 End Sub
 
 Private Sub PersistLineup

@@ -1,4 +1,5 @@
 ﻿B4A=true
+B4i=true
 Group=Default Group
 ModulesStructureVersion=1
 Type=Class
@@ -12,7 +13,11 @@ Sub Class_Globals
 	Private content As Panel
 	Private match As Map
 	Private club As Map
+#if B4A
 	Private edtSummary As EditText
+#else if B4i
+	Private edtSummary As TextView
+#End If
 	Private lblCoachPotm As Label
 	Private lblOppPotm As Label
 	Private potm As Map
@@ -49,10 +54,10 @@ Private Sub B4XPage_Appear
 End Sub
 
 Private Sub BuildChrome
-	Dim chrome As Map = modUI.AddPageChrome(Root, "Post-match", "btnBack", "btnSave", "✓", True)
+	Dim chrome As Map = modUI.AddPageChrome(Me, Root, "Post-match", "btnBack", "btnSave", "✓", True)
 	Dim top As Int = chrome.Get("ContentTop")
-	sv.Initialize(3000dip)
-	Root.AddView(sv, 0, top, Root.Width, Root.Height - top)
+	modUI.InitScroll(sv, 3000dip)
+	Root.AddView(sv, 0, top, modUI.ViewWidth(Root), modUI.ViewHeight(Root) - top)
 	content = sv.Panel
 	content.Color = modConfig.COLOR_DARK_BG
 End Sub
@@ -107,21 +112,22 @@ Private Sub BuildForm
 	content.RemoveAllViews
 	voteEdits.Initialize
 	Dim y As Int = 12dip
-	Dim w As Int = Root.Width - 32dip
+	Dim w As Int = modUI.ViewWidth(Root) - 32dip
 	
 	Dim lblScore As Label
 	lblScore.Initialize("")
-	lblScore.Text = match.GetDefault("title", "Match") & "  ·  " & match.GetDefault("scoreA", 0) & "-" & match.GetDefault("scoreB", 0)
-	lblScore.TextSize = 14
+	lblScore.Text = match.GetDefault("title", "Match") & "  ·  " & modLocal.ScoreLine(match)
+	modUI.SetSingleLine(lblScore, False)
+	modUI.SetTextSize(lblScore, 14)
 	lblScore.TextColor = modConfig.COLOR_DARK_MUTED
-	content.AddView(lblScore, 16dip, y, w, 22dip)
-	y = y + 28dip
+	content.AddView(lblScore, 16dip, y, w, 40dip)
+	y = y + 46dip
 	
 	y = AddSectionLabel(y, "COACH'S MATCH SUMMARY")
 	edtSummary.Initialize("")
 	modUI.StyleEditText(edtSummary, "How did the game go?")
-	edtSummary.SingleLine = False
-	edtSummary.Gravity = Bit.Or(Gravity.TOP, Gravity.LEFT)
+	modUI.SetSingleLine(edtSummary, False)
+	modUI.SetAlign(edtSummary, "TOP", "LEFT")
 	edtSummary.Text = match.GetDefault("aiSummary", "")
 	content.AddView(edtSummary, 16dip, y, w, 120dip)
 	y = y + 132dip
@@ -129,40 +135,40 @@ Private Sub BuildForm
 	y = AddSectionLabel(y, "COACH'S PLAYER OF THE MATCH")
 	lblCoachPotm.Initialize("")
 	lblCoachPotm.Text = NamesOf(coachPotmIds)
-	lblCoachPotm.TextSize = 15
+	modUI.SetTextSize(lblCoachPotm, 15)
 	lblCoachPotm.TextColor = modConfig.COLOR_DARK_TEXT
-	lblCoachPotm.Typeface = Typeface.DEFAULT_BOLD
-	lblCoachPotm.SingleLine = False
+	modUI.SetBold(lblCoachPotm, True)
+	modUI.SetSingleLine(lblCoachPotm, False)
 	content.AddView(lblCoachPotm, 16dip, y, w - 100dip, 48dip)
 	Dim btnCoach As Button
-	btnCoach.Initialize("btnPickCoach")
+	modUI.InitButton(Me, btnCoach, "btnPickCoach")
 	btnCoach.Text = "Pick"
 	btnCoach.Color = modConfig.COLOR_ACCENT
-	btnCoach.TextColor = Colors.White
-	content.AddView(btnCoach, Root.Width - 100dip, y, 84dip, 40dip)
+	modUI.SetButtonTextColor(btnCoach, Colors.White)
+	content.AddView(btnCoach, modUI.ViewWidth(Root) - 100dip, y, 84dip, 40dip)
 	y = y + 52dip
 	
 	y = AddSectionLabel(y, "OPPOSITION PLAYER OF THE MATCH")
 	lblOppPotm.Initialize("")
 	lblOppPotm.Text = NamesOf(oppPotmIds)
-	lblOppPotm.TextSize = 15
+	modUI.SetTextSize(lblOppPotm, 15)
 	lblOppPotm.TextColor = modConfig.COLOR_DARK_TEXT
-	lblOppPotm.Typeface = Typeface.DEFAULT_BOLD
-	lblOppPotm.SingleLine = False
+	modUI.SetBold(lblOppPotm, True)
+	modUI.SetSingleLine(lblOppPotm, False)
 	content.AddView(lblOppPotm, 16dip, y, w - 100dip, 48dip)
 	Dim btnOpp As Button
-	btnOpp.Initialize("btnPickOpp")
+	modUI.InitButton(Me, btnOpp, "btnPickOpp")
 	btnOpp.Text = "Pick"
 	btnOpp.Color = modConfig.COLOR_ACCENT
-	btnOpp.TextColor = Colors.White
-	content.AddView(btnOpp, Root.Width - 100dip, y, 84dip, 40dip)
+	modUI.SetButtonTextColor(btnOpp, Colors.White)
+	content.AddView(btnOpp, modUI.ViewWidth(Root) - 100dip, y, 84dip, 40dip)
 	y = y + 52dip
 	
 	y = AddSectionLabel(y, "FAN PLAYER OF THE MATCH — VOTES")
 	Dim hint As Label
 	hint.Initialize("")
 	hint.Text = "Enter how many fan votes each player received."
-	hint.TextSize = 12
+	modUI.SetTextSize(hint, 12)
 	hint.TextColor = modConfig.COLOR_DARK_MUTED
 	content.AddView(hint, 16dip, y, w, 20dip)
 	y = y + 28dip
@@ -180,20 +186,24 @@ Private Sub BuildForm
 		Dim pid As String = memberIds.Get(i)
 		Dim row As Panel
 		row.Initialize("")
-		row.Background = modUI.RoundedBg(modConfig.COLOR_DARK_CARD, 10dip)
+		modUI.RoundView(row, modConfig.COLOR_DARK_CARD, 10dip)
 		content.AddView(row, 16dip, y, w, 52dip)
 		Dim lblN As Label
 		lblN.Initialize("")
 		lblN.Text = memberNames.Get(i)
-		lblN.TextSize = 14
+		modUI.SetTextSize(lblN, 14)
 		lblN.TextColor = modConfig.COLOR_DARK_TEXT
-		lblN.Gravity = Gravity.CENTER_VERTICAL
+		modUI.SetAlign(lblN, "CENTER", "LEFT")
 		row.AddView(lblN, 12dip, 0, w - 100dip, 52dip)
+#if B4A
 		Dim edt As EditText
+#else if B4i
+		Dim edt As TextField
+#End If
 		edt.Initialize("")
 		modUI.StyleEditText(edt, "0")
-		edt.InputType = edt.INPUT_TYPE_NUMBERS
-		edt.Gravity = Gravity.CENTER
+		modUI.SetKeyboard(edt, "numbers")
+		modUI.SetAlign(edt, "CENTER", "CENTER")
 		Dim votes As Int = fanCounts.GetDefault(pid, 0)
 		If votes > 0 Then edt.Text = "" & votes Else edt.Text = ""
 		row.AddView(edt, w - 84dip, 8dip, 68dip, 36dip)
@@ -202,18 +212,18 @@ Private Sub BuildForm
 	Next
 	
 	y = y + 24dip
-	content.Height = Max(y, Root.Height)
-	sv.Panel.Height = content.Height
+	content.Height = Max(y, modUI.ViewHeight(Root))
+	modUI.SetScrollContentHeight(sv, content.Height)
 End Sub
 
 Private Sub AddSectionLabel(y As Int, text As String) As Int
 	Dim lbl As Label
 	lbl.Initialize("")
 	lbl.Text = text
-	lbl.TextSize = 11
-	lbl.Typeface = Typeface.DEFAULT_BOLD
+	modUI.SetTextSize(lbl, 11)
+	modUI.SetBold(lbl, True)
 	lbl.TextColor = modConfig.COLOR_DARK_MUTED
-	content.AddView(lbl, 16dip, y, Root.Width - 32dip, 18dip)
+	content.AddView(lbl, 16dip, y, modUI.ViewWidth(Root) - 32dip, 18dip)
 	Return y + 22dip
 End Sub
 
@@ -245,10 +255,10 @@ Private Sub PickPlayers(title As String, current As List) As ResumableSub
 	hint.Initialize("")
 	hint.Text = "Tap everyone who shared it, then Done."
 	hint.TextColor = modConfig.COLOR_DARK_MUTED
-	hint.TextSize = 12
+	modUI.SetTextSize(hint, 12)
 	pnl.AddView(hint, 8dip, 4dip, 304dip, 28dip)
 	Dim sv As ScrollView
-	sv.Initialize(800dip)
+	modUI.InitScroll(sv, 800dip)
 	pnl.AddView(sv, 0, 36dip, 320dip, 376dip)
 	potmPickHost = sv.Panel
 	potmPickHost.Color = modConfig.COLOR_DARK_BG
@@ -284,7 +294,7 @@ Private Sub DrawPotmGrid
 		Dim tag As Map
 		tag.Initialize
 		tag.Put("id", pid)
-		Dim slot As Map = modUI.CreateRoundPlayerSlot("potmSpot", tag, size, memberNames.Get(i), memberAvatars.GetDefault(pid, ""), "", potmPickIds.ContainsKey(pid))
+		Dim slot As Map = modUI.CreateRoundPlayerSlot(Me, "potmSpot", tag, size, memberNames.Get(i), memberAvatars.GetDefault(pid, ""), "", potmPickIds.ContainsKey(pid))
 		Dim spot As Panel = slot.Get("panel")
 		potmPickHost.AddView(spot, col * cellW + 8dip, row * rowH + 4dip, size + 16dip, size + 18dip)
 		If slot.ContainsKey("imageView") Then
@@ -313,7 +323,7 @@ Private Sub LoadPotmAvatar(iv As ImageView, url As String)
 			Dim bmp As Bitmap = job.GetBitmap
 			If bmp <> Null And bmp.IsInitialized Then
 				iv.Bitmap = bmp
-				iv.Gravity = Gravity.FILL
+				modUI.SetImageFill(iv)
 			End If
 		Catch
 			Log("POTM avatar: " & LastException.Message)
@@ -339,7 +349,7 @@ Private Sub CollectFanCounts As Map
 	Dim fc As Map
 	fc.Initialize
 	For Each pid As String In voteEdits.Keys
-		Dim edt As EditText = voteEdits.Get(pid)
+		Dim edt As B4XView = voteEdits.Get(pid)
 		Dim n As Int = 0
 		Try
 			If edt.Text.Trim <> "" Then n = edt.Text
@@ -360,7 +370,7 @@ Private Sub btnSave_Click
 	match.Put("potmVotes", potm)
 	modDb.SaveMatch(match)
 	modAppState.UpsertMatch(match)
-	ToastMessageShow("Post-match report saved", False)
+	modPlatform.Toast("Post-match report saved", False)
 End Sub
 
 Private Sub btnBack_Click

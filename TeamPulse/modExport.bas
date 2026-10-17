@@ -1,4 +1,5 @@
 ﻿B4A=true
+B4i=true
 Group=Default Group
 ModulesStructureVersion=1
 Type=StaticCode
@@ -9,6 +10,9 @@ Version=12.80
 
 Sub Process_Globals
 	Private Const PAGE_SIZE As Int = 1000
+#if B4i
+	Private zipBytesWritten As Int
+#End If
 End Sub
 
 Public Sub UserCanExport As Boolean
@@ -93,6 +97,7 @@ Public Sub ShareDocument(dir As String, fileName As String, mime As String, choo
 		If dir = "" Or fileName = "" Or File.Exists(dir, fileName) = False Then
 			Return "Could not open the share sheet. Nothing was changed."
 		End If
+#if B4A
 		Dim context As JavaObject
 		context.InitializeContext
 		Dim provider As JavaObject
@@ -108,6 +113,15 @@ Public Sub ShareDocument(dir As String, fileName As String, mime As String, choo
 		shareIntent.WrapAsIntentChooser(chooserTitle)
 		shareIntent.Flags = 1
 		StartActivity(shareIntent)
+#else if B4i
+		Dim items As List
+		items.Initialize
+		items.Add(File.Combine(dir, fileName))
+		Dim avc As ActivityViewController
+		avc.Initialize("avc", items)
+		Dim pg As Page = modPlatform.TopPage
+		avc.Show(pg, pg.RootPanel)
+#End If
 		Return ""
 	Catch
 		Log("ShareDocument: " & LastException)
@@ -415,7 +429,7 @@ Private Sub MatchesSheet(clubs As List, matches As List) As Map
 			m.GetDefault("meetTime", ""), _
 			m.GetDefault("kickOffTime", ""), _
 			m.GetDefault("status", ""), _
-			AsInt(m.GetDefault("scoreA", 0)) & "-" & AsInt(m.GetDefault("scoreB", 0)), _
+			modLocal.ScoreLine(m), _
 			m.GetDefault("formation", ""), _
 			m.GetDefault("aiSummary", ""))))
 	Next
@@ -542,23 +556,22 @@ End Sub
 ' Copy matches so the live app state is left untouched. Drop cached goals, assists,
 ' and cards when the match already has those events; keep minutes as a fallback.
 Private Sub MatchesForStats(matches As List, events As List) As List
-	Dim copy As List
-	copy.Initialize
+	Dim cloned As List
+	cloned.Initialize
 	Dim i As Int
 	For i = 0 To matches.Size - 1
 		Dim src As Map = matches.Get(i)
 		Dim m As Map
 		m.Initialize
-		Dim k As Int
-		For k = 0 To src.Size - 1
-			m.Put(src.GetKeyAt(k), src.GetValueAt(k))
+		For Each key As Object In src.Keys
+			m.Put(key, src.Get(key))
 		Next
 		If MatchHasCountingEvents(m.GetDefault("id", ""), events) Then
 			m.Put("playerStats", MinutesOnly(src.GetDefault("playerStats", Null)))
 		End If
-		copy.Add(m)
+		cloned.Add(m)
 	Next
-	Return copy
+	Return cloned
 End Sub
 
 Private Sub MatchHasCountingEvents(matchId As String, events As List) As Boolean
@@ -578,15 +591,14 @@ Private Sub MinutesOnly(playerStats As Object) As Map
 	stripped.Initialize
 	If playerStats = Null Or (playerStats Is Map) = False Then Return stripped
 	Dim ps As Map = playerStats
-	Dim i As Int
-	For i = 0 To ps.Size - 1
-		Dim rowObj As Object = ps.GetValueAt(i)
+	For Each pid As Object In ps.Keys
+		Dim rowObj As Object = ps.Get(pid)
 		If (rowObj Is Map) = False Then Continue
 		Dim row As Map = rowObj
 		Dim kept As Map
 		kept.Initialize
 		kept.Put("minutesPlayed", row.GetDefault("minutesPlayed", 0))
-		stripped.Put(ps.GetKeyAt(i), kept)
+		stripped.Put(pid, kept)
 	Next
 	Return stripped
 End Sub
@@ -618,12 +630,16 @@ Private Sub SortPlayerRows(rows As List)
 End Sub
 
 Private Sub PlayerRowBefore(left As List, right As List) As Boolean
-	Dim club As Int = ("" & left.Get(0)).CompareTo("" & right.Get(0))
+	Dim leftClub As String = "" & left.Get(0)
+	Dim rightClub As String = "" & right.Get(0)
+	Dim club As Int = leftClub.CompareTo(rightClub)
 	If club <> 0 Then Return club < 0
 	Dim ls As Int = SquadSortKey(left.Get(2))
 	Dim rs As Int = SquadSortKey(right.Get(2))
 	If ls <> rs Then Return ls < rs
-	Return ("" & left.Get(1)).CompareTo("" & right.Get(1)) < 0
+	Dim leftName As String = "" & left.Get(1)
+	Dim rightName As String = "" & right.Get(1)
+	Return leftName.CompareTo(rightName) < 0
 End Sub
 
 Private Sub SquadSortKey(v As Object) As Int
@@ -650,8 +666,8 @@ Private Sub SortEvents(events As List)
 End Sub
 
 Private Sub PrepareSharedDir As String
-	File.MakeDir(File.DirInternal, "shared")
-	Dim dir As String = File.Combine(File.DirInternal, "shared")
+	File.MakeDir(modPlatform.AppDir, "shared")
+	Dim dir As String = File.Combine(modPlatform.AppDir, "shared")
 	Dim existing As List = File.ListFiles(dir)
 	If existing.IsInitialized Then
 		Dim i As Int
@@ -672,6 +688,7 @@ Private Sub FileStamp As String
 End Sub
 
 Private Sub WriteWorkbook(dir As String, fileName As String, sheets As List) As String
+#if B4A
 	Dim fos As JavaObject
 	Dim zip As JavaObject
 	Try
@@ -699,8 +716,12 @@ Private Sub WriteWorkbook(dir As String, fileName As String, sheets As List) As 
 		End Try
 		Return "Could not create the spreadsheet. Nothing was changed."
 	End Try
+#else if B4i
+	Return WriteWorkbookStored(dir, fileName, sheets)
+#End If
 End Sub
 
+#if B4A
 Private Sub AddZipText(zip As JavaObject, entryName As String, xml As String)
 	Dim bytes() As Byte = xml.GetBytes("UTF8")
 	Dim crc As JavaObject
@@ -718,6 +739,157 @@ Private Sub AddZipText(zip As JavaObject, entryName As String, xml As String)
 	zip.RunMethod("write", Array(bytes, 0, bytes.Length))
 	zip.RunMethod("closeEntry", Null)
 End Sub
+#End If
+
+#if B4i
+Private Sub WriteWorkbookStored(dir As String, fileName As String, sheets As List) As String
+	Dim out As OutputStream
+	Try
+		zipBytesWritten = 0
+		Dim names As List
+		names.Initialize
+		Dim payloads As List
+		payloads.Initialize
+		names.Add("[Content_Types].xml")
+		payloads.Add(ContentTypesXml(sheets.Size).GetBytes("UTF8"))
+		names.Add("_rels/.rels")
+		payloads.Add(RootRelsXml.GetBytes("UTF8"))
+		names.Add("xl/workbook.xml")
+		payloads.Add(WorkbookXml(sheets).GetBytes("UTF8"))
+		names.Add("xl/_rels/workbook.xml.rels")
+		payloads.Add(WorkbookRelsXml(sheets.Size).GetBytes("UTF8"))
+		names.Add("xl/styles.xml")
+		payloads.Add(StylesXml.GetBytes("UTF8"))
+		Dim i As Int
+		For i = 0 To sheets.Size - 1
+			Dim sheet As Map = sheets.Get(i)
+			names.Add("xl/worksheets/sheet" & (i + 1) & ".xml")
+			payloads.Add(WorksheetXml(sheet).GetBytes("UTF8"))
+		Next
+		out = File.OpenOutput(dir, fileName, False)
+		Dim offsets As List
+		offsets.Initialize
+		For i = 0 To names.Size - 1
+			offsets.Add(ZipOffset)
+			Dim entryName As String = names.Get(i)
+			Dim data() As Byte = payloads.Get(i)
+			WriteStoredEntry(out, entryName, data)
+		Next
+		Dim centralStart As Int = ZipOffset
+		For i = 0 To names.Size - 1
+			Dim entryName As String = names.Get(i)
+			Dim data() As Byte = payloads.Get(i)
+			WriteCentralEntry(out, entryName, data, offsets.Get(i))
+		Next
+		Dim centralEnd As Int = ZipOffset
+		WriteEndOfCentral(out, names.Size, centralEnd - centralStart, centralStart)
+		out.Close
+		Return ""
+	Catch
+		Log("WriteWorkbookStored: " & LastException)
+		Try
+			If out.IsInitialized Then out.Close
+		Catch
+			Log("WriteWorkbookStored close: " & LastException)
+		End Try
+		Return "Could not create the spreadsheet. Nothing was changed."
+	End Try
+End Sub
+
+Private Sub ZipOffset As Int
+	Return zipBytesWritten
+End Sub
+
+Private Sub WriteStoredEntry(out As OutputStream, entryName As String, data() As Byte)
+	Dim nameBytes() As Byte = entryName.GetBytes("UTF8")
+	Dim crc As Int = Crc32(data)
+	WriteInt(out, 0x04034b50)
+	WriteShort(out, 20)
+	WriteShort(out, 0)
+	WriteShort(out, 0)
+	WriteShort(out, 0)
+	WriteShort(out, 0)
+	WriteInt(out, crc)
+	WriteInt(out, data.Length)
+	WriteInt(out, data.Length)
+	WriteShort(out, nameBytes.Length)
+	WriteShort(out, 0)
+	out.WriteBytes(nameBytes, 0, nameBytes.Length)
+	zipBytesWritten = zipBytesWritten + nameBytes.Length
+	out.WriteBytes(data, 0, data.Length)
+	zipBytesWritten = zipBytesWritten + data.Length
+End Sub
+
+Private Sub WriteCentralEntry(out As OutputStream, entryName As String, data() As Byte, localOffset As Int)
+	Dim nameBytes() As Byte = entryName.GetBytes("UTF8")
+	Dim crc As Int = Crc32(data)
+	WriteInt(out, 0x02014b50)
+	WriteShort(out, 20)
+	WriteShort(out, 20)
+	WriteShort(out, 0)
+	WriteShort(out, 0)
+	WriteShort(out, 0)
+	WriteShort(out, 0)
+	WriteInt(out, crc)
+	WriteInt(out, data.Length)
+	WriteInt(out, data.Length)
+	WriteShort(out, nameBytes.Length)
+	WriteShort(out, 0)
+	WriteShort(out, 0)
+	WriteShort(out, 0)
+	WriteShort(out, 0)
+	WriteInt(out, 0)
+	WriteInt(out, localOffset)
+	out.WriteBytes(nameBytes, 0, nameBytes.Length)
+	zipBytesWritten = zipBytesWritten + nameBytes.Length
+End Sub
+
+Private Sub WriteEndOfCentral(out As OutputStream, count As Int, centralSize As Int, centralOffset As Int)
+	WriteInt(out, 0x06054b50)
+	WriteShort(out, 0)
+	WriteShort(out, 0)
+	WriteShort(out, count)
+	WriteShort(out, count)
+	WriteInt(out, centralSize)
+	WriteInt(out, centralOffset)
+	WriteShort(out, 0)
+End Sub
+
+Private Sub WriteInt(out As OutputStream, v As Int)
+	Dim b(4) As Byte
+	b(0) = Bit.And(v, 0xFF)
+	b(1) = Bit.And(Bit.ShiftRight(v, 8), 0xFF)
+	b(2) = Bit.And(Bit.ShiftRight(v, 16), 0xFF)
+	b(3) = Bit.And(Bit.UnsignedShiftRight(v, 24), 0xFF)
+	out.WriteBytes(b, 0, 4)
+	zipBytesWritten = zipBytesWritten + 4
+End Sub
+
+Private Sub WriteShort(out As OutputStream, v As Int)
+	Dim b(2) As Byte
+	b(0) = Bit.And(v, 0xFF)
+	b(1) = Bit.And(Bit.ShiftRight(v, 8), 0xFF)
+	out.WriteBytes(b, 0, 2)
+	zipBytesWritten = zipBytesWritten + 2
+End Sub
+
+Private Sub Crc32(data() As Byte) As Int
+	Dim crc As Int = 0xFFFFFFFF
+	Dim i As Int
+	For i = 0 To data.Length - 1
+		crc = Bit.Xor(crc, Bit.And(data(i), 0xFF))
+		Dim n As Int
+		For n = 1 To 8
+			If Bit.And(crc, 1) = 1 Then
+				crc = Bit.Xor(Bit.UnsignedShiftRight(crc, 1), 0xEDB88320)
+			Else
+				crc = Bit.UnsignedShiftRight(crc, 1)
+			End If
+		Next
+	Next
+	Return Bit.Not(crc)
+End Sub
+#End If
 
 Private Sub ContentTypesXml(sheetCount As Int) As String
 	Dim sb As StringBuilder
@@ -902,7 +1074,8 @@ End Sub
 Private Sub IsHomeMatch(m As Map) As Boolean
 	Dim v As Object = m.GetDefault("isHome", True)
 	If v = False Then Return False
-	If ("" & v).ToLowerCase = "false" Then Return False
+	Dim homeText As String = "" & v
+	If homeText.ToLowerCase = "false" Then Return False
 	Return True
 End Sub
 

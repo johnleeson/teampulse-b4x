@@ -1,0 +1,110 @@
+﻿Build1=Default,com.johnleeson.teampulse
+Group=Default Group
+Library1=b4xcollections
+Library10=xcustomlistview
+Library11=xui views
+Library12=ihttputils2
+Library2=b4xpages
+Library3=icore
+Library4=ihttp
+Library5=ihud
+Library6=ijson
+Library7=imedia
+Library8=iphone
+Library9=ixui
+Module1=|relative|..\B4XMainPage
+Module10=|relative|..\modLocal
+Module11=|relative|..\modPlatform
+Module12=|relative|..\modStats
+Module13=|relative|..\modSubPlanExport
+Module14=|relative|..\modSubPlanner
+Module15=|relative|..\modSupabase
+Module16=|relative|..\modUI
+Module17=|relative|..\PageClubForm
+Module18=|relative|..\PageClubMembers
+Module19=|relative|..\PageClubs
+Module2=|relative|..\clsHttp
+Module20=|relative|..\PageDashboard
+Module21=|relative|..\PageEventEdit
+Module22=|relative|..\PageLiveFeed
+Module23=|relative|..\PageLogin
+Module24=|relative|..\PageMatches
+Module25=|relative|..\PageMatchHub
+Module26=|relative|..\PageMatchLineup
+Module27=|relative|..\PageMatchPrep
+Module28=|relative|..\PageMatchSquad
+Module29=|relative|..\PageMatchStats
+Module3=|relative|..\clsLongPress
+Module30=|relative|..\PageMatchSubs
+Module31=|relative|..\PageMatchSummary
+Module32=|relative|..\PagePlayerEdit
+Module33=|relative|..\PageScheduleMatch
+Module34=|relative|..\PageStats
+Module35=|relative|..\PageTraining
+Module36=|relative|..\PageTrainingEdit
+Module4=|relative|..\modAppState
+Module5=|relative|..\modAuth
+Module6=|relative|..\modConfig
+Module7=|relative|..\modDb
+Module8=|relative|..\modExport
+Module9=|relative|..\modFormations
+NumberOfFiles=0
+NumberOfLibraries=12
+NumberOfModules=36
+Version=10.31
+@EndOfDesignText@
+#Region  Project Attributes
+	#ApplicationLabel: TeamPulse
+	#Version: 1.0.6
+	#iPhoneOrientations: Portrait
+	#iPadOrientations: Portrait
+	#Target: iPhone, iPad
+	#ATSEnabled: True
+	#MinVersion: 16
+	#PlistExtra: <key>NSPhotoLibraryUsageDescription</key><string>Attach a photo to a match event.</string>
+#End Region
+
+Sub Process_Globals
+	Public App As Application
+	Public NavControl As NavigationController
+	Public hd As HUD
+End Sub
+
+Private Sub Application_Start (Nav As NavigationController)
+	NavControl = Nav
+	Dim PagesManager As B4XPagesManager
+	PagesManager.Initialize(NavControl)
+	NavControl.NavigationBarVisible = False
+End Sub
+
+'Template version: B4i-1.00
+#Region  Delegates
+
+Private Sub Application_Background
+	modPlatform.BeginBackgroundTask
+	modLocal.PersistSnapshot
+	B4XPages.Delegate.Activity_Pause
+	Try
+		CallSub(B4XPages.MainPage, "NoteBackgroundSync")
+		CallSubDelayed(B4XPages.MainPage, "KickSync")
+	Catch
+		Log("Background sync: " & LastException)
+		Try
+			CallSub(B4XPages.MainPage, "CancelBackgroundHold")
+		Catch
+			Log("CancelBackgroundHold: " & LastException)
+		End Try
+		modPlatform.EndBackgroundTask
+	End Try
+End Sub
+
+Private Sub Application_Foreground
+	B4XPages.Delegate.Activity_Resume
+	Try
+		CallSubDelayed(B4XPages.MainPage, "KickSync")
+	Catch
+		Log("Foreground sync: " & LastException)
+	End Try
+End Sub
+
+#End Region

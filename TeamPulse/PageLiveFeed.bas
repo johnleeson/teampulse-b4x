@@ -1,4 +1,5 @@
 ﻿B4A=true
+B4i=true
 Group=Default Group
 ModulesStructureVersion=1
 Type=Class
@@ -20,6 +21,7 @@ Sub Class_Globals
 	Private memberIds As List
 	Private memberAvatars As Map
 	Private dialog As B4XDialog
+	Private shareHost As B4XView
 	Private subSheet As Panel
 	Private subPitch As Panel
 	Private chipHost As Panel
@@ -79,68 +81,71 @@ Private Sub pollTimer_Tick
 End Sub
 
 Private Sub BuildUI
-	Dim chrome As Map = modUI.AddPageChrome(Root, "Live", "btnBack", "btnShare", "↗", True)
+	Dim chrome As Map = modUI.AddPageChrome(Me, Root, "Live", "btnBack", "btnShare", "↗", True)
 	Dim top As Int = chrome.Get("ContentTop")
 	lblStatus.Initialize("")
 	lblStatus.TextColor = 0xFF94A3B8
-	lblStatus.Gravity = Gravity.CENTER
-	Root.AddView(lblStatus, 0, top, Root.Width, 22dip)
+	modUI.SetAlign(lblStatus, "CENTER", "CENTER")
+	Root.AddView(lblStatus, 0, top, modUI.ViewWidth(Root), 22dip)
 	
 	lblScore.Initialize("")
 	lblScore.TextColor = Colors.White
-	lblScore.TextSize = 36
-	lblScore.Typeface = Typeface.DEFAULT_BOLD
-	lblScore.Gravity = Gravity.CENTER
-	Root.AddView(lblScore, 0, top + 24dip, Root.Width, 52dip)
+	modUI.SetTextSize(lblScore, 36)
+	modUI.SetBold(lblScore, True)
+	modUI.SetAlign(lblScore, "CENTER", "CENTER")
+	Root.AddView(lblScore, 0, top + 24dip, modUI.ViewWidth(Root), 52dip)
 	
 	lblClock.Initialize("")
 	lblClock.TextColor = modConfig.COLOR_ACCENT
-	lblClock.TextSize = 14
-	lblClock.Typeface = Typeface.DEFAULT_BOLD
-	lblClock.Gravity = Gravity.CENTER
-	Root.AddView(lblClock, 0, top + 76dip, Root.Width, 22dip)
+	modUI.SetTextSize(lblClock, 14)
+	modUI.SetBold(lblClock, True)
+	modUI.SetAlign(lblClock, "CENTER", "CENTER")
+	Root.AddView(lblClock, 0, top + 76dip, modUI.ViewWidth(Root), 22dip)
 	
 	Dim row As Int = top + 106dip
 	AddAction("GOAL", "btnGoal", 8dip, row, modConfig.COLOR_SUCCESS)
-	AddAction("SUB", "btnSub", Root.Width / 4 + 4dip, row, modConfig.COLOR_ACCENT)
-	AddAction("YC", "btnYC", Root.Width / 2 + 4dip, row, 0xFFF59E0B)
-	AddAction("RC", "btnRC", Root.Width * 3 / 4 + 4dip, row, modConfig.COLOR_DANGER)
+	AddAction("SUB", "btnSub", modUI.ViewWidth(Root) / 4 + 4dip, row, modConfig.COLOR_ACCENT)
+	AddAction("YC", "btnYC", modUI.ViewWidth(Root) / 2 + 4dip, row, 0xFFF59E0B)
+	AddAction("RC", "btnRC", modUI.ViewWidth(Root) * 3 / 4 + 4dip, row, modConfig.COLOR_DANGER)
 	
 	row = top + 158dip
 	AddAction("HT", "btnHT", 8dip, row, 0xFFFB923C)
-	AddAction("2H", "btn2H", Root.Width / 4 + 4dip, row, 0xFF38BDF8)
-	AddAction("Full time", "btnEnd", Root.Width / 2 + 4dip, row, 0xFF64748B)
-	AddAction("RESET", "btnReset", Root.Width * 3 / 4 + 4dip, row, 0xFF334155)
+	AddAction("2H", "btn2H", modUI.ViewWidth(Root) / 4 + 4dip, row, 0xFF38BDF8)
+	AddAction("Full time", "btnEnd", modUI.ViewWidth(Root) / 2 + 4dip, row, 0xFF64748B)
+	AddAction("RESET", "btnReset", modUI.ViewWidth(Root) * 3 / 4 + 4dip, row, 0xFF334155)
 	
 	row = top + 210dip
 	AddAction("Corner" & CRLF & "(us)", "btnCornerUs", 8dip, row, 0xFF0F766E)
-	AddAction("Corner" & CRLF & "(them)", "btnCornerThem", Root.Width / 4 + 4dip, row, 0xFF115E59)
-	AddAction("Penalty" & CRLF & "(us)", "btnPenUs", Root.Width / 2 + 4dip, row, 0xFF7C3AED)
-	AddAction("Penalty" & CRLF & "(them)", "btnPenThem", Root.Width * 3 / 4 + 4dip, row, 0xFF5B21B6)
+	AddAction("Corner" & CRLF & "(them)", "btnCornerThem", modUI.ViewWidth(Root) / 4 + 4dip, row, 0xFF115E59)
+	AddAction("Penalty" & CRLF & "(us)", "btnPenUs", modUI.ViewWidth(Root) / 2 + 4dip, row, 0xFF7C3AED)
+	AddAction("Penalty" & CRLF & "(them)", "btnPenThem", modUI.ViewWidth(Root) * 3 / 4 + 4dip, row, 0xFF5B21B6)
 	
 	row = top + 262dip
 	AddAction("NOTE", "btnComment", 8dip, row, 0xFF6366F1)
+	AddAction("PENS", "btnPens", modUI.ViewWidth(Root) / 4 + 4dip, row, 0xFF7C3AED)
 	
 	Dim listTop As Int = top + 314dip
-	clv = modUI.AddCustomListViewThemed(Root, 0, listTop, Root.Width, Root.Height - listTop - 8dip, Me, "clv", True)
+	clv = modUI.AddCustomListViewThemed(Root, 0, listTop, modUI.ViewWidth(Root), modUI.ViewHeight(Root) - listTop - 8dip, Me, "clv", True)
 End Sub
 
 Private Sub AddAction(text As String, event As String, left As Int, top As Int, col As Int)
 	Dim b As Button
-	b.Initialize(event)
+	modUI.InitButton(Me, b, event)
 	b.Text = text
-	b.TextSize = 11
+	modUI.SetTextSize(b, 11)
 	If text.Length > 10 Then
-		b.TextSize = 9
+		modUI.SetTextSize(b, 9)
 	Else If text.Length > 6 Then
-		b.TextSize = 10
+		modUI.SetTextSize(b, 10)
 	End If
-	b.SingleLine = False
+	modUI.SetSingleLine(b, False)
 	b.Color = col
-	b.TextColor = Colors.White
-	b.Gravity = Gravity.CENTER
+	modUI.SetButtonTextColor(b, Colors.White)
+	modUI.SetAlign(b, "CENTER", "CENTER")
+#if B4A
 	b.Padding = Array As Int(2dip, 0, 2dip, 0)
-	Root.AddView(b, left, top, Root.Width / 4 - 12dip, 44dip)
+#End If
+	Root.AddView(b, left, top, modUI.ViewWidth(Root) / 4 - 12dip, 44dip)
 End Sub
 
 Private Sub Load
@@ -179,12 +184,18 @@ Public Sub Refresh
 	lblStatus.Text = match.GetDefault("status", "") & "  ·  " & modLocal.SyncWord(match.Get("id"))
 	lblScore.Text = match.GetDefault("scoreA", 0) & "  -  " & match.GetDefault("scoreB", 0)
 	Dim nowMs As Long = DateTime.Now
-	lblClock.Text = modAppState.FormatHHMM(nowMs) & "   ·   " & modAppState.PlayingMinuteAt(match, nowMs) & "'"
+	Dim pensLine As String = modLocal.PensStatusLine(match.Get("id"))
+	If pensLine <> "" Then
+		lblClock.Text = pensLine
+	Else
+		lblClock.Text = modAppState.FormatHHMM(nowMs) & "   ·   " & modAppState.PlayingMinuteAt(match, nowMs) & "'"
+	End If
+	modLocal.SyncShootoutFlags(match.Get("id"))
 	modUI.ApplyDarkListBackground(clv, 0xFF0F172A)
 	clv.Clear
 	Dim events As List = modAppState.EventsNewestFirst(match.Get("id"))
 	Dim names As Map = NameByIdMap
-	Dim cardW As Int = Root.Width - 16dip
+	Dim cardW As Int = modUI.ViewWidth(Root) - 16dip
 	Dim i As Int
 	For i = 0 To events.Size - 1
 		Dim e As Map = events.Get(i)
@@ -192,7 +203,7 @@ Public Sub Refresh
 		Dim isLast As Boolean = (i = events.Size - 1)
 		Dim card As Panel = BuildTimelineRow(cardW, e, names, isFirst, isLast)
 		Dim h As Int = modUI.TimelineItemHeight(e)
-		card.SetLayout(0, 0, cardW, h)
+		modUI.PlaceView(card, 0, 0, cardW, h)
 		clv.Add(card, e.GetDefault("id", ""))
 	Next
 	If events.Size = 0 Then
@@ -202,11 +213,11 @@ Public Sub Refresh
 		Dim lbl As Label
 		lbl.Initialize("")
 		lbl.Text = "No events yet — tap GOAL to start the timeline."
-		lbl.TextSize = 13
+		modUI.SetTextSize(lbl, 13)
 		lbl.TextColor = 0xFF64748B
-		lbl.Gravity = Gravity.CENTER
+		modUI.SetAlign(lbl, "CENTER", "CENTER")
 		empty.AddView(lbl, 16dip, 0, cardW - 32dip, 48dip)
-		empty.SetLayout(0, 0, cardW, 48dip)
+		modUI.PlaceView(empty, 0, 0, cardW, 48dip)
 		clv.Add(empty, "")
 	End If
 	modUI.ApplyDarkListBackground(clv, 0xFF0F172A)
@@ -228,15 +239,15 @@ Private Sub BuildTimelineRow(Width As Int, ev As Map, names As Map, isFirst As B
 	Dim h As Int = modUI.TimelineItemHeight(ev)
 	Dim btnSize As Int = 34dip
 	Dim top As Int = (h - btnSize) / 2
-	Dim btnEdit As Button = modUI.CreateIconButton("btnEvEdit", "✎", 0xFF334155, eid)
+	Dim btnEdit As Button = modUI.CreateIconButton(Me, "btnEvEdit", "✎", 0xFF334155, eid)
 	row.AddView(btnEdit, Width - 80dip, top, btnSize, btnSize)
-	Dim btnDel As Button = modUI.CreateIconButton("btnEvDel", "✕", 0xFF7F1D1D, eid)
+	Dim btnDel As Button = modUI.CreateIconButton(Me, "btnEvDel", "✕", 0xFF7F1D1D, eid)
 	row.AddView(btnDel, Width - 40dip, top, btnSize, btnSize)
 	Return row
 End Sub
 
 Private Sub btnEvEdit_Click
-	Dim b As Button = Sender
+	Dim b As Button = modUI.ClickedButton(Sender)
 	Dim eid As String = b.Tag
 	If eid = "" Then Return
 	modAppState.SelectedEventId = eid
@@ -244,7 +255,7 @@ Private Sub btnEvEdit_Click
 End Sub
 
 Private Sub btnEvDel_Click
-	Dim b As Button = Sender
+	Dim b As Button = modUI.ClickedButton(Sender)
 	Dim eid As String = b.Tag
 	If eid = "" Then Return
 	Dim ev As Map = modAppState.FindEvent(eid)
@@ -256,7 +267,7 @@ Private Sub btnEvDel_Click
 	modAppState.RemoveEvent(eid)
 	RecomputeScoresAndStats
 	Refresh
-	ToastMessageShow("Event deleted", False)
+	modPlatform.Toast("Event deleted", False)
 End Sub
 
 Private Sub StyleDarkDialog
@@ -334,7 +345,7 @@ Private Sub btnGoal_Click
 		End If
 	Else
 		If memberNames.Size = 0 Then
-			ToastMessageShow("No players in club", False)
+			modPlatform.Toast("No players in club", False)
 			Return
 		End If
 		Dim scorerChips As List = ChipList(Array As String("owngoal", "Own goal"))
@@ -373,7 +384,7 @@ Private Sub btnSub_Click
 	If actionsLocked Or subSheetOpen Then Return
 	match = modAppState.FindMatch(modAppState.SelectedMatchId)
 	If memberIds.Size < 2 Then
-		ToastMessageShow("Need at least 2 players", False)
+		modPlatform.Toast("Need at least 2 players", False)
 		Return
 	End If
 	sheetMode = "sub"
@@ -388,9 +399,8 @@ End Sub
 Private Sub OccupiedSlots(pitch As Map) As Int
 	Dim n As Int = 0
 	If pitch.IsInitialized = False Then Return 0
-	Dim i As Int
-	For i = 0 To pitch.Size - 1
-		Dim pid As String = "" & pitch.GetValueAt(i)
+	For Each rawPid As Object In pitch.Values
+		Dim pid As String = "" & rawPid
 		If pid <> "" And pid <> "null" Then n = n + 1
 	Next
 	Return n
@@ -488,8 +498,124 @@ Private Sub btnEnd_Click
 	ApplyProjectedMinutesToStats
 	modDb.SaveMatch(match)
 	modAppState.UpsertMatch(match)
-	ToastMessageShow("Full time. Add the summary later from the match page.", False)
+	modPlatform.Toast("Full time. Add the summary later from the match page.", False)
 	Refresh
+End Sub
+
+Private Sub btnPens_Click
+	If actionsLocked Then Return
+	match = modAppState.FindMatch(modAppState.SelectedMatchId)
+	If match.IsInitialized = False Or match.ContainsKey("id") = False Then Return
+	If modLocal.HasFullTime(match.Get("id")) = False Then
+		modPlatform.Toast("End the match before a shootout", False)
+		Return
+	End If
+	Dim st As Map = modLocal.ShootoutState(match.Get("id"))
+	If modLocal.IsFlag(st, "active") = False Then
+		Wait For (SetupShootout) Complete (ok As Boolean)
+		If ok Then modPlatform.Toast("Shootout ready. Tap Pens for each kick.", False)
+		Return
+	End If
+	If modLocal.IsFlag(st, "decided") Then
+		modPlatform.Toast("Shootout is already decided", False)
+		Return
+	End If
+	Wait For (LogShootoutKick(st)) Complete (logged As Boolean)
+	If logged = False Then Return
+	Dim after As Map = modLocal.ShootoutState(match.Get("id"))
+	If modLocal.IsFlag(after, "decided") Then
+		modPlatform.Toast(modLocal.PensStatusLine(match.Get("id")), False)
+	End If
+	Refresh
+End Sub
+
+Private Sub SetupShootout As ResumableSub
+	Dim countChips As List = ChipList(Array As String("5", "5 each", "3", "3 each", "other", "Other"))
+	Wait For (ShowPick("Kicks each side", countChips, False, "")) Complete (countChoice As String)
+	If countChoice = "" Then Return False
+	Dim kicksEach As Int = 5
+	If countChoice = "3" Then
+		kicksEach = 3
+	Else If countChoice = "other" Then
+		Wait For (AskPositiveInt("How many kicks each?")) Complete (typed As Int)
+		If typed < 1 Then Return False
+		kicksEach = typed
+	End If
+	Dim startChips As List = ChipList(Array As String("A", "We start", "B", "Opposition starts"))
+	Wait For (ShowPick("Who takes the first kick?", startChips, False, "")) Complete (firstTeam As String)
+	If firstTeam <> "A" And firstTeam <> "B" Then Return False
+	Dim details As Map
+	details.Initialize
+	details.Put("kind", "setup")
+	details.Put("kicksEach", kicksEach)
+	details.Put("firstTeam", firstTeam)
+	details.Put("seq", DateTime.Now)
+	StampTimeDetails(details)
+	AddEvent("SHOOTOUT", modLocal.ShootoutSetupContent(kicksEach, firstTeam), details)
+	Return True
+End Sub
+
+Private Sub LogShootoutKick(st As Map) As ResumableSub
+	Dim team As String = st.GetDefault("nextTeam", "A")
+	Dim playerId As String = ""
+	Dim playerName As String = ""
+	If team <> "B" Then
+		team = "A"
+		If memberNames.Size = 0 Then
+			modPlatform.Toast("No players in club", False)
+			Return False
+		End If
+		Wait For (ShowPick("Who's taking it?", EmptyChipList, True, "")) Complete (playerId)
+		If playerId = "" Then Return False
+		playerName = NameForId(playerId)
+	End If
+	Dim resultChips As List = ChipList(Array As String("scored", "Scored", "missed", "Missed"))
+	Wait For (ShowPick("Penalty", resultChips, False, "")) Complete (result As String)
+	If result <> "scored" And result <> "missed" Then Return False
+	Dim scored As Boolean = (result = "scored")
+	Dim details As Map
+	details.Initialize
+	details.Put("kind", "kick")
+	details.Put("team", team)
+	details.Put("scored", scored)
+	details.Put("player", playerId)
+	details.Put("suddenDeath", modLocal.IsFlag(st, "inSuddenDeath"))
+	details.Put("seq", DateTime.Now)
+	StampTimeDetails(details)
+	AddEvent("SHOOTOUT", modLocal.ShootoutKickContent(team, scored, playerName), details)
+	modLocal.SyncShootoutFlags(match.Get("id"))
+	Return True
+End Sub
+
+Private Sub AskPositiveInt(title As String) As ResumableSub
+	StyleDarkDialog
+	Dim pnl As B4XView = xui.CreatePanel("")
+	pnl.SetLayoutAnimated(0, 0, 0, 320dip, 80dip)
+	pnl.Color = modConfig.COLOR_DARK_CARD
+#if B4A
+	Dim edt As EditText
+#else if B4i
+	Dim edt As TextField
+#End If
+	edt.Initialize("")
+	modUI.StyleEditTextDark(edt, "5")
+	modUI.SetKeyboard(edt, "numbers")
+	pnl.AddView(edt, 12dip, 16dip, 296dip, 48dip)
+	dialog.Title = title
+	Wait For (dialog.ShowCustom(pnl, "OK", "", "Cancel")) Complete (Result As Int)
+	If Result <> xui.DialogResponse_Positive Then Return 0
+	Dim n As Int
+	Try
+		n = edt.Text.Trim
+	Catch
+		modPlatform.Toast("Enter a number", False)
+		Return 0
+	End Try
+	If n < 1 Then
+		modPlatform.Toast("Enter at least 1", False)
+		Return 0
+	End If
+	Return n
 End Sub
 
 Private Sub btnComment_Click
@@ -499,18 +625,22 @@ Private Sub btnComment_Click
 	Dim pnl As B4XView = xui.CreatePanel("")
 	pnl.SetLayoutAnimated(0, 0, 0, 320dip, 180dip)
 	pnl.Color = modConfig.COLOR_DARK_CARD
+#if B4A
 	Dim edt As EditText
+#else if B4i
+	Dim edt As TextView
+#End If
 	edt.Initialize("")
 	modUI.StyleEditTextDark(edt, "Write a note…")
-	edt.SingleLine = False
-	edt.Gravity = Bit.Or(Gravity.TOP, Gravity.LEFT)
+	modUI.SetSingleLine(edt, False)
+	modUI.SetAlign(edt, "TOP", "LEFT")
 	pnl.AddView(edt, 12dip, 12dip, 296dip, 150dip)
 	dialog.Title = "Match note"
 	Wait For (dialog.ShowCustom(pnl, "Save", "", "Cancel")) Complete (Result As Int)
 	If Result <> xui.DialogResponse_Positive Then Return
 	Dim note As String = edt.Text.Trim
 	If note = "" Then
-		ToastMessageShow("Enter some text", False)
+		modPlatform.Toast("Enter some text", False)
 		Return
 	End If
 	Dim details As Map
@@ -557,7 +687,7 @@ End Sub
 Private Sub btnReset_Click
 	If actionsLocked Then Return
 	If match.GetDefault("status", "") <> "LIVE" Then
-		ToastMessageShow("Only live matches can be reset", False)
+		modPlatform.Toast("Only live matches can be reset", False)
 		Return
 	End If
 	match.Put("status", "UPCOMING")
@@ -573,7 +703,7 @@ Private Sub btnReset_Click
 	details.Initialize
 	StampTimeDetails(details)
 	AddEvent("COMMENT", "Match reset to upcoming (kick-off undone)", details)
-	ToastMessageShow("Match reset to upcoming", False)
+	modPlatform.Toast("Match reset to upcoming", False)
 	B4XPages.ShowPage("MatchHub")
 End Sub
 
@@ -583,6 +713,7 @@ End Sub
 
 Public Sub RecomputeScoresAndStats
 	match = modAppState.FindMatch(modAppState.SelectedMatchId)
+	If match.IsInitialized And match.ContainsKey("id") Then modLocal.SyncShootoutFlags(match.Get("id"))
 	Dim scoreA As Int = 0
 	Dim scoreB As Int = 0
 	Dim stats As Map
@@ -730,7 +861,9 @@ End Sub
 Private Sub OpenSubSheet
 	actionsLocked = True
 	If subSheet.IsInitialized = False Then BuildSubSheet
+#if B4A
 	subSheet.Elevation = 24dip
+#End If
 	subSheet.Visible = True
 	subSheet.BringToFront
 	subSheetOpen = True
@@ -771,34 +904,34 @@ End Sub
 Private Sub BuildSubSheet
 	subSheet.Initialize("subSheetBlock")
 	subSheet.Color = 0xFF0F172A
+#if B4A
 	subSheet.Elevation = 24dip
-	Root.AddView(subSheet, 0, 0, Root.Width, Root.Height)
-	Dim btnBack As Button = modUI.CreateChromeIconButton("btnSubCancel", "←", Colors.Transparent, Colors.White)
-	btnBack.TextSize = 26
+#End If
+	Root.AddView(subSheet, 0, 0, modUI.ViewWidth(Root), modUI.ViewHeight(Root))
+	Dim btnBack As Button = modUI.CreateChromeIconButton(Me, "btnSubCancel", "←", Colors.Transparent, Colors.White)
+	modUI.SetTextSize(btnBack, 26)
 	subSheet.AddView(btnBack, 4dip, 6dip, 44dip, 44dip)
 	subHint.Initialize("")
 	subHint.TextColor = Colors.White
-	subHint.TextSize = 15
-	subHint.Typeface = Typeface.DEFAULT_BOLD
-	subHint.Gravity = Bit.Or(Gravity.LEFT, Gravity.CENTER_VERTICAL)
-	subHint.SingleLine = False
-	subSheet.AddView(subHint, 52dip, 6dip, Root.Width - 64dip, 48dip)
+	modUI.SetTextSize(subHint, 15)
+	modUI.SetBold(subHint, True)
+	modUI.SetAlign(subHint, "CENTER", "LEFT")
+	modUI.SetSingleLine(subHint, False)
+	subSheet.AddView(subHint, 52dip, 6dip, modUI.ViewWidth(Root) - 64dip, 48dip)
 	chipHost.Initialize("subSheetBlock")
 	chipHost.Color = 0xFF0F172A
-	subSheet.AddView(chipHost, 0, 64dip, Root.Width, 0)
+	subSheet.AddView(chipHost, 0, 64dip, modUI.ViewWidth(Root), 0)
 	subPitch.Initialize("subSheetBlock")
 	subPitch.Color = 0xFF15803D
-	Dim pitchBg As ColorDrawable
-	pitchBg.Initialize2(0xFF15803D, 12dip, 2dip, Colors.ARGB(180, 22, 101, 52))
-	subPitch.Background = pitchBg
-	subSheet.AddView(subPitch, 8dip, 64dip, Root.Width - 16dip, 0)
-	benchScroll.Initialize(200dip)
+	modUI.RoundBorder(subPitch, 0xFF15803D, 12dip, 2dip, Colors.ARGB(180, 22, 101, 52))
+	subSheet.AddView(subPitch, 8dip, 64dip, modUI.ViewWidth(Root) - 16dip, 0)
+	modUI.InitScroll(benchScroll, 200dip)
 	benchScroll.Color = 0xFF0F172A
-	subSheet.AddView(benchScroll, 0, 64dip, Root.Width, 80dip)
+	subSheet.AddView(benchScroll, 0, 64dip, modUI.ViewWidth(Root), 80dip)
 	benchScroll.Panel.Color = 0xFF0F172A
 	benchHost.Initialize("subSheetBlock")
 	benchHost.Color = 0xFF0F172A
-	benchScroll.Panel.AddView(benchHost, 0, 0, Root.Width, 200dip)
+	benchScroll.Panel.AddView(benchHost, 0, 0, modUI.ViewWidth(Root), 200dip)
 End Sub
 
 Private Sub subSheetBlock_Click
@@ -828,21 +961,21 @@ Private Sub DrawSheet
 	Dim y As Int = 64dip
 	Dim chipH As Int = 0
 	If sheetChips.IsInitialized And sheetChips.Size > 0 Then chipH = 88dip
-	chipHost.SetLayout(0, y, Root.Width, chipH)
+	modUI.PlaceView(chipHost, 0, y, modUI.ViewWidth(Root), chipH)
 	chipHost.Visible = chipH > 0
 	y = y + chipH
 	Dim pitchH As Int = 0
 	If showPitch Then
-		pitchH = Root.Height * 0.40
+		pitchH = modUI.ViewHeight(Root) * 0.40
 		If pitchH < 220dip Then pitchH = 220dip
 	End If
-	subPitch.SetLayout(8dip, y, Root.Width - 16dip, pitchH)
+	modUI.PlaceView(subPitch, 8dip, y, modUI.ViewWidth(Root) - 16dip, pitchH)
 	subPitch.Visible = pitchH > 0
 	y = y + pitchH
 	Dim showBench As Boolean = sheetMode = "sub" Or sheetIncludePlayers
-	Dim benchH As Int = Root.Height - y
+	Dim benchH As Int = modUI.ViewHeight(Root) - y
 	If benchH < 4dip Then benchH = 4dip
-	benchScroll.SetLayout(0, y, Root.Width, benchH)
+	modUI.PlaceView(benchScroll, 0, y, modUI.ViewWidth(Root), benchH)
 	benchScroll.Visible = showBench
 	DrawChips
 	If showPitch Then
@@ -867,9 +1000,7 @@ Private Sub DrawPitch(lineup As Map)
 	subPitch.RemoveAllViews
 	If subPitch.Width < 2dip Or subPitch.Height < 2dip Then Return
 	subPitch.Color = 0xFF15803D
-	Dim pitchBg As ColorDrawable
-	pitchBg.Initialize2(0xFF15803D, 12dip, 2dip, Colors.ARGB(180, 22, 101, 52))
-	subPitch.Background = pitchBg
+	modUI.RoundBorder(subPitch, 0xFF15803D, 12dip, 2dip, Colors.ARGB(180, 22, 101, 52))
 	modUI.PaintPitchMarkings(subPitch)
 	Dim formName As String = ""
 	If match.IsInitialized Then formName = match.GetDefault("formation", "")
@@ -909,8 +1040,8 @@ Private Sub DrawBenchGrid
 		lbl.Initialize("")
 		lbl.Text = "No one else to pick"
 		lbl.TextColor = 0xFF94A3B8
-		lbl.TextSize = 14
-		lbl.Gravity = Gravity.CENTER
+		modUI.SetTextSize(lbl, 14)
+		modUI.SetAlign(lbl, "CENTER", "CENTER")
 		benchHost.AddView(lbl, 12dip, 8dip, benchScroll.Width - 24dip, 36dip)
 		SizeBench(52dip)
 		Return
@@ -940,9 +1071,9 @@ End Sub
 ' The scroll view's own panel uses Android frame params, so SetLayout on it crashes.
 Private Sub SizeBench(contentH As Int)
 	Dim w As Int = benchScroll.Width
-	If w < 2dip Then w = Root.Width
-	benchHost.SetLayout(0, 0, w, contentH)
-	benchScroll.Panel.Height = contentH
+	If w < 2dip Then w = modUI.ViewWidth(Root)
+	modUI.PlaceView(benchHost, 0, 0, w, contentH)
+	modUI.SetScrollContentHeight(benchScroll, contentH)
 End Sub
 
 Private Sub GridPlayerIds As List
@@ -952,9 +1083,8 @@ Private Sub GridPlayerIds As List
 	onPitch.Initialize
 	If showPitch And match.IsInitialized Then
 		Dim lineup As Map = modAppState.LineupAfterSubs(match)
-		Dim s As Int
-		For s = 0 To lineup.Size - 1
-			Dim onId As String = "" & lineup.GetValueAt(s)
+		For Each onRaw As Object In lineup.Values
+			Dim onId As String = "" & onRaw
 			If onId <> "" And onId <> "null" Then onPitch.Put(onId, True)
 		Next
 	End If
@@ -990,7 +1120,7 @@ Private Sub AddRoundSpot(parent As Panel, left As Int, top As Int, size As Int, 
 	tag.Put("id", id)
 	Dim avatar As String = ""
 	If displayName <> "" Then avatar = memberAvatars.GetDefault(id, "")
-	Dim slot As Map = modUI.CreateRoundPlayerSlot("pickSpot", tag, size, displayName, avatar, emptyLabel, selected)
+	Dim slot As Map = modUI.CreateRoundPlayerSlot(Me, "pickSpot", tag, size, displayName, avatar, emptyLabel, selected)
 	Dim pnl As Panel = slot.Get("panel")
 	parent.AddView(pnl, left, top, size + 16dip, size + 18dip)
 	If slot.ContainsKey("imageView") = False Then Return
@@ -1010,7 +1140,7 @@ Private Sub LoadSlotAvatar(iv As ImageView, url As String)
 			Dim bmp As Bitmap = job.GetBitmap
 			If bmp <> Null And bmp.IsInitialized Then
 				iv.Bitmap = bmp
-				iv.Gravity = Gravity.FILL
+				modUI.SetImageFill(iv)
 			End If
 		Catch
 			Log("LiveFeed avatar: " & LastException.Message)
@@ -1021,9 +1151,8 @@ End Sub
 
 Private Sub pickSpot_LongClick As Boolean
 	If sheetMode <> "sub" Or showPitch = False Then Return False
-	Dim raw As Object = Sender
-	If Not(raw Is Panel) Then Return True
-	Dim pnl As Panel = raw
+	Dim pnl As Panel = modUI.LongClickPanel(Sender)
+	If pnl.IsInitialized = False Then Return True
 	If Not(pnl.Tag Is Map) Then Return True
 	Dim tag As Map = pnl.Tag
 	If tag.GetDefault("kind", "") <> "slot" Then Return True
@@ -1031,24 +1160,24 @@ Private Sub pickSpot_LongClick As Boolean
 	If slotId = "" Then Return True
 	If holdSlot = "" Then
 		holdSlot = slotId
-		ToastMessageShow("Hold another spot to switch", False)
+		modPlatform.Toast("Hold another spot to switch", False)
 		CallSubDelayed(Me, "DrawSheet")
 		Return True
 	End If
 	If slotId = holdSlot Then
 		holdSlot = ""
-		ToastMessageShow("Switch cancelled", False)
+		modPlatform.Toast("Switch cancelled", False)
 		CallSubDelayed(Me, "DrawSheet")
 		Return True
 	End If
 	If LogPositionSwitch(holdSlot, slotId) = False Then
-		ToastMessageShow("Nothing to switch", False)
+		modPlatform.Toast("Nothing to switch", False)
 		Return True
 	End If
 	holdSlot = ""
 	subOffSlot = ""
 	subOffPlayer = ""
-	ToastMessageShow("Positions switched", False)
+	modPlatform.Toast("Positions switched", False)
 	CallSubDelayed(Me, "DrawSheet")
 	Return True
 End Sub
@@ -1113,11 +1242,11 @@ Private Sub pickSpot_Click
 			Dim lineup As Map = modAppState.LineupAfterSubs(match)
 			Dim pid As String = "" & lineup.GetDefault(id, "")
 			If pid = "" Or pid = "null" Then
-				ToastMessageShow("Nobody in that spot", False)
+				modPlatform.Toast("Nobody in that spot", False)
 				Return
 			End If
 			If pid = pickExclude Then
-				ToastMessageShow("That's the scorer", False)
+				modPlatform.Toast("That's the scorer", False)
 				Return
 			End If
 			FinishPick(pid)
@@ -1131,7 +1260,7 @@ Private Sub pickSpot_Click
 		Dim lineup2 As Map = modAppState.LineupAfterSubs(match)
 		Dim pid2 As String = "" & lineup2.GetDefault(id, "")
 		If pid2 = "" Or pid2 = "null" Then
-			ToastMessageShow("Nobody in that spot", False)
+			modPlatform.Toast("Nobody in that spot", False)
 			Return
 		End If
 		If subOffSlot = id Then
@@ -1143,7 +1272,7 @@ Private Sub pickSpot_Click
 		Return
 	End If
 	If showPitch And subOffSlot = "" Then
-		ToastMessageShow("Tap a player on the pitch first", False)
+		modPlatform.Toast("Tap a player on the pitch first", False)
 		Return
 	End If
 	If showPitch = False And subOffPlayer = "" Then
@@ -1175,7 +1304,7 @@ End Sub
 Private Sub btnShare_Click
 	If sharingTimeline Then Return
 	If match.IsInitialized = False Or match.ContainsKey("id") = False Then
-		ToastMessageShow("Open a match first", False)
+		modPlatform.Toast("Open a match first", False)
 		Return
 	End If
 	sharingTimeline = True
@@ -1187,7 +1316,7 @@ Private Sub btnShare_Click
 		err = "Could not create the timeline image."
 	End Try
 	sharingTimeline = False
-	If err <> "" Then ToastMessageShow(err, True)
+	If err <> "" Then modPlatform.Toast(err, True)
 End Sub
 
 Private Sub WriteAndShareTimeline As String
@@ -1199,18 +1328,15 @@ Private Sub WriteAndShareTimeline As String
 		oldest.Add(newest.Get(i))
 	Next
 	Dim names As Map = NameByIdMap
-	Dim scale As Float = ShareTextScale
+	Dim scale As Float = modPlatform.TextScale
 	Dim width As Int = 1080
 	Dim pad As Int = 56
 	Dim maxW As Float = width - pad * 2
-	Dim probeBmp As Bitmap
-	probeBmp.InitializeMutable(16, 16)
-	Dim measureCvs As Canvas
-	measureCvs.Initialize2(probeBmp)
+	Dim measureCvs As B4XCanvas = OpenShareCanvas(16, 16)
 	Dim drawn As List
 	drawn.Initialize
 	AddWrappedShareLines(drawn, measureCvs, scale, "title", match.GetDefault("title", "Match"), maxW)
-	AddWrappedShareLines(drawn, measureCvs, scale, "score", match.GetDefault("scoreA", 0) & " - " & match.GetDefault("scoreB", 0), maxW)
+	AddWrappedShareLines(drawn, measureCvs, scale, "score", modLocal.ScoreLine(match), maxW)
 	AddShareLine(drawn, "gap", "")
 	If oldest.Size = 0 Then
 		AddWrappedShareLines(drawn, measureCvs, scale, "body", "No events yet", maxW)
@@ -1233,11 +1359,9 @@ Private Sub WriteAndShareTimeline As String
 	height = height + pad
 	If height < 480 Then height = 480
 	If height > 12000 Then height = 12000
-	Dim bmp As Bitmap
-	bmp.InitializeMutable(width, height)
-	Dim cvs As Canvas
-	cvs.Initialize2(bmp)
-	Dim bg As Rect
+	measureCvs.Release
+	Dim cvs As B4XCanvas = OpenShareCanvas(width, height)
+	Dim bg As B4XRect
 	bg.Initialize(0, 0, width, height)
 	cvs.DrawRect(bg, 0xFF0F172A, True, 0)
 	Dim y As Int = pad
@@ -1250,14 +1374,15 @@ Private Sub WriteAndShareTimeline As String
 			y = y + rowH
 			Continue
 		End If
-		Dim face As Typeface = ShareFace(kind)
-		Dim size As Float = SharePx(kind) / scale
-		Dim textH As Float = cvs.MeasureStringHeight("Ag", face, size)
-		cvs.DrawText(row.Get("text"), pad, y + textH, face, size, ShareColor(kind), "LEFT")
+		Dim fnt As B4XFont = ShareFont(kind, scale)
+		Dim textH As Float = cvs.MeasureText("Ag", fnt).Height
+		cvs.DrawText(row.Get("text"), pad, y + textH, fnt, ShareColor(kind), "LEFT")
 		y = y + rowH
 	Next
-	File.MakeDir(File.DirInternal, "shared")
-	Dim dir As String = File.Combine(File.DirInternal, "shared")
+	Dim bmp As Bitmap = cvs.CreateBitmap
+	cvs.Release
+	File.MakeDir(modPlatform.AppDir, "shared")
+	Dim dir As String = File.Combine(modPlatform.AppDir, "shared")
 	Dim existing As List = File.ListFiles(dir)
 	If existing.IsInitialized Then
 		For i = 0 To existing.Size - 1
@@ -1272,21 +1397,12 @@ Private Sub WriteAndShareTimeline As String
 	Return modExport.ShareDocument(dir, fileName, "image/jpeg", "Share timeline")
 End Sub
 
-' Canvas text size is scaled by the screen density. Divide so sizes below are real pixels on the bitmap.
-Private Sub ShareTextScale As Float
-	Dim scale As Float = 1
-	Try
-		Dim jo As JavaObject
-		jo.InitializeContext
-		Dim res As JavaObject = jo.RunMethod("getResources", Null)
-		Dim metrics As JavaObject = res.RunMethod("getDisplayMetrics", Null)
-		scale = metrics.GetField("scaledDensity")
-	Catch
-		Log("ShareTextScale: " & LastException)
-		scale = 1
-	End Try
-	If scale <= 0 Then scale = 1
-	Return scale
+Private Sub OpenShareCanvas(width As Int, height As Int) As B4XCanvas
+	shareHost = xui.CreatePanel("")
+	shareHost.SetLayoutAnimated(0, 0, 0, width, height)
+	Dim cvs As B4XCanvas
+	cvs.Initialize(shareHost)
+	Return cvs
 End Sub
 
 Private Sub SharePx(kind As String) As Float
@@ -1297,9 +1413,10 @@ Private Sub SharePx(kind As String) As Float
 	Return 32
 End Sub
 
-Private Sub ShareFace(kind As String) As Typeface
-	If kind = "title" Or kind = "score" Or kind = "meta" Then Return Typeface.DEFAULT_BOLD
-	Return Typeface.DEFAULT
+Private Sub ShareFont(kind As String, scale As Float) As B4XFont
+	Dim size As Float = SharePx(kind) / scale
+	If kind = "title" Or kind = "score" Or kind = "meta" Then Return xui.CreateDefaultBoldFont(size)
+	Return xui.CreateDefaultFont(size)
 End Sub
 
 Private Sub ShareColor(kind As String) As Int
@@ -1309,19 +1426,15 @@ Private Sub ShareColor(kind As String) As Int
 	Return 0xFFE2E8F0
 End Sub
 
-Private Sub ShareRowHeight(cvs As Canvas, scale As Float, row As Map) As Int
+Private Sub ShareRowHeight(cvs As B4XCanvas, scale As Float, row As Map) As Int
 	Dim kind As String = row.Get("kind")
 	If kind = "gap" Then Return 20
-	Dim face As Typeface = ShareFace(kind)
-	Dim size As Float = SharePx(kind) / scale
-	Dim h As Float = cvs.MeasureStringHeight("Ag", face, size)
+	Dim h As Float = cvs.MeasureText("Ag", ShareFont(kind, scale)).Height
 	Return h + 14
 End Sub
 
-Private Sub AddWrappedShareLines(lines As List, cvs As Canvas, scale As Float, kind As String, text As String, maxW As Float)
-	Dim face As Typeface = ShareFace(kind)
-	Dim size As Float = SharePx(kind) / scale
-	Dim parts As List = WrapShareToWidth(cvs, text, face, size, maxW)
+Private Sub AddWrappedShareLines(lines As List, cvs As B4XCanvas, scale As Float, kind As String, text As String, maxW As Float)
+	Dim parts As List = WrapShareToWidth(cvs, text, ShareFont(kind, scale), maxW)
 	Dim i As Int
 	For i = 0 To parts.Size - 1
 		AddShareLine(lines, kind, parts.Get(i))
@@ -1336,7 +1449,7 @@ Private Sub AddShareLine(lines As List, kind As String, text As String)
 	lines.Add(row)
 End Sub
 
-Private Sub WrapShareToWidth(cvs As Canvas, text As String, face As Typeface, size As Float, maxW As Float) As List
+Private Sub WrapShareToWidth(cvs As B4XCanvas, text As String, fnt As B4XFont, maxW As Float) As List
 	Dim lines As List
 	lines.Initialize
 	Dim rest As String = text.Trim
@@ -1345,11 +1458,11 @@ Private Sub WrapShareToWidth(cvs As Canvas, text As String, face As Typeface, si
 		Return lines
 	End If
 	Do While rest <> ""
-		If cvs.MeasureStringWidth(rest, face, size) <= maxW Then
+		If cvs.MeasureText(rest, fnt).Width <= maxW Then
 			lines.Add(rest)
 			Exit
 		End If
-		Dim cut As Int = FitShareCut(cvs, rest, face, size, maxW)
+		Dim cut As Int = FitShareCut(cvs, rest, fnt, maxW)
 		If cut < 1 Then cut = 1
 		Dim piece As String = rest.SubString2(0, cut).Trim
 		If piece = "" Then piece = rest.SubString2(0, cut)
@@ -1360,13 +1473,13 @@ Private Sub WrapShareToWidth(cvs As Canvas, text As String, face As Typeface, si
 End Sub
 
 ' Last character index that still fits, preferring a space.
-Private Sub FitShareCut(cvs As Canvas, text As String, face As Typeface, size As Float, maxW As Float) As Int
+Private Sub FitShareCut(cvs As B4XCanvas, text As String, fnt As B4XFont, maxW As Float) As Int
 	Dim lo As Int = 1
 	Dim hi As Int = text.Length - 1
 	Dim best As Int = 1
 	Do While lo <= hi
 		Dim mid As Int = (lo + hi) / 2
-		If cvs.MeasureStringWidth(text.SubString2(0, mid), face, size) <= maxW Then
+		If cvs.MeasureText(text.SubString2(0, mid), fnt).Width <= maxW Then
 			best = mid
 			lo = mid + 1
 		Else

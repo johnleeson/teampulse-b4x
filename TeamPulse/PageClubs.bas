@@ -1,4 +1,5 @@
 ﻿B4A=true
+B4i=true
 Group=Default Group
 ModulesStructureVersion=1
 Type=Class
@@ -22,19 +23,19 @@ Private Sub B4XPage_Appear
 End Sub
 
 Private Sub BuildUI
-	Dim chrome As Map = modUI.AddPageChrome(Root, "My Clubs", "btnBack", "btnNew", "+", True)
+	Dim chrome As Map = modUI.AddPageChrome(Me, Root, "My Clubs", "btnBack", "btnNew", "+", True)
 	Dim top As Int = chrome.Get("ContentTop")
-	clv = modUI.AddCustomListViewThemed(Root, 0, top, Root.Width, Root.Height - top, Me, "clv", True)
+	clv = modUI.AddCustomListViewThemed(Root, 0, top, modUI.ViewWidth(Root), modUI.ViewHeight(Root) - top, Me, "clv", True)
 End Sub
 
 Public Sub Refresh
 	clv.Clear
 	modUI.ApplyDarkListBackground(clv, modConfig.COLOR_DARK_BG)
 	Dim myClubs As List = modAppState.ClubsForCurrentUser
-	Dim cardW As Int = Root.Width - 24dip
+	Dim cardW As Int = modUI.ViewWidth(Root) - 24dip
 	If myClubs.Size = 0 Then
 		Dim empty As Panel = modUI.CreateSimpleRowThemed(cardW, "No clubs yet. Tap + to create or join.", "", True)
-		empty.SetLayout(0, 0, cardW, modUI.SimpleRowHeight)
+		modUI.PlaceView(empty, 0, 0, cardW, modUI.SimpleRowHeight)
 		clv.Add(empty, "")
 		Return
 	End If
@@ -43,7 +44,7 @@ Public Sub Refresh
 		Dim c As Map = myClubs.Get(i)
 		Dim h As Int = modUI.ClubCardHeight + 8dip
 		Dim card As Panel = modUI.CreateClubCardThemed(cardW, c, "", True)
-		card.SetLayout(0, 0, cardW, h)
+		modUI.PlaceView(card, 0, 0, cardW, h)
 		clv.Add(card, c.Get("id"))
 	Next
 End Sub

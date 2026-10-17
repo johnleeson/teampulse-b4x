@@ -1,4 +1,5 @@
 ﻿B4A=true
+B4i=true
 Group=Default Group
 ModulesStructureVersion=1
 Type=Class
@@ -24,15 +25,15 @@ End Sub
 
 Private Sub BuildUI
 	' ← Matches ......................... +
-	Dim chrome As Map = modUI.AddPageChrome(Root, "Matches", "btnBack", "btnNew", "+", True)
+	Dim chrome As Map = modUI.AddPageChrome(Me, Root, "Matches", "btnBack", "btnNew", "+", True)
 	contentTop = chrome.Get("ContentTop")
-	clv = modUI.AddCustomListViewThemed(Root, 0, contentTop, Root.Width, Root.Height - contentTop, Me, "clv", True)
+	clv = modUI.AddCustomListViewThemed(Root, 0, contentTop, modUI.ViewWidth(Root), modUI.ViewHeight(Root) - contentTop, Me, "clv", True)
 End Sub
 
 Public Sub Refresh
 	clv.Clear
 	Dim matches As List = modAppState.Matches
-	Dim cardW As Int = Root.Width - 24dip
+	Dim cardW As Int = modUI.ViewWidth(Root) - 24dip
 	If matches.Size = 0 Then
 		Dim emptyH As Int = 64dip
 		Dim empty As Panel
@@ -41,11 +42,11 @@ Public Sub Refresh
 		Dim lbl As Label
 		lbl.Initialize("")
 		lbl.Text = "No matches yet. Tap + to schedule."
-		lbl.TextSize = 14
+		modUI.SetTextSize(lbl, 14)
 		lbl.TextColor = modConfig.COLOR_DARK_MUTED
-		lbl.Gravity = Gravity.CENTER
+		modUI.SetAlign(lbl, "CENTER", "CENTER")
 		empty.AddView(lbl, 16dip, 0, cardW - 8dip, emptyH)
-		empty.SetLayout(0, 0, cardW, emptyH)
+		modUI.PlaceView(empty, 0, 0, cardW, emptyH)
 		clv.Add(empty, "")
 		modUI.ApplyDarkListBackground(clv, modConfig.COLOR_DARK_BG)
 		Return
@@ -59,7 +60,7 @@ Public Sub Refresh
 		wrap.Color = modConfig.COLOR_DARK_BG
 		Dim card As Panel = modUI.CreateMatchCardThemed(cardW, m, "", True)
 		wrap.AddView(card, 12dip, 4dip, cardW, modUI.MatchCardHeight)
-		wrap.SetLayout(0, 0, Root.Width, cardH)
+		modUI.PlaceView(wrap, 0, 0, modUI.ViewWidth(Root), cardH)
 		clv.Add(wrap, m.Get("id"))
 	Next
 	modUI.ApplyDarkListBackground(clv, modConfig.COLOR_DARK_BG)

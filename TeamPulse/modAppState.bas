@@ -1,4 +1,5 @@
 ﻿B4A=true
+B4i=true
 Group=Default Group
 ModulesStructureVersion=1
 Type=StaticCode
@@ -214,13 +215,7 @@ Public Sub RemoveEventsForMatch(matchId As String)
 End Sub
 
 Public Sub NewId As String
-	Try
-		Dim uuid As JavaObject
-		uuid.InitializeStatic("java.util.UUID")
-		Return uuid.RunMethodJO("randomUUID", Null).RunMethod("toString", Null)
-	Catch
-		Return "local-" & DateTime.Now & "-" & Rnd(1000, 9999)
-	End Try
+	Return modPlatform.NewUuid
 End Sub
 
 ' --- Match clock helpers (wall time ↔ playing minutes, HT break aware) ---
@@ -235,7 +230,8 @@ Public Sub KickOffMillis(match As Map) As Long
 	If startMs > 0 Then Return startMs
 	Dim started As Long = ToLong(match.GetDefault("liveStartedAt", 0))
 	If started > 0 Then Return started
-	Dim ko As String = ("" & match.GetDefault("kickOffTime", "")).Trim
+	Dim ko As String = "" & match.GetDefault("kickOffTime", "")
+	ko = ko.Trim
 	If ko.Length >= 4 And ko.IndexOf(":") > 0 Then
 		Return ParseHHMMOnMatchDay(match, ko)
 	End If
@@ -264,7 +260,7 @@ Public Sub HalfMarkers(matchId As String) As Map
 	out.Put("shMs", shMs)
 	Dim htMin As Int = 0
 	If kick > 0 And htMs > kick Then
-		htMin = (htMs - kick) / DateTime.TicksPerMinute
+		htMin = (htMs - kick) / modPlatform.MinuteTicks
 	End If
 	out.Put("htMin", htMin)
 	Return out
@@ -280,11 +276,11 @@ Public Sub PlayingMinuteAt(match As Map, wallMs As Long) As Int
 	Dim shMs As Long = marks.GetDefault("shMs", 0)
 	Dim mins As Int
 	If htMs <= 0 Or wallMs <= htMs Then
-		mins = (wallMs - kick) / DateTime.TicksPerMinute
+		mins = (wallMs - kick) / modPlatform.MinuteTicks
 	Else If shMs <= 0 Or wallMs < shMs Then
 		mins = htMin
 	Else
-		mins = htMin + ((wallMs - shMs) / DateTime.TicksPerMinute)
+		mins = htMin + ((wallMs - shMs) / modPlatform.MinuteTicks)
 	End If
 	If mins < 0 Then mins = 0
 	Return mins
@@ -300,10 +296,10 @@ Public Sub WallClockForMinute(match As Map, minute As Int) As Long
 	Dim htMin As Int = marks.GetDefault("htMin", 0)
 	Dim shMs As Long = marks.GetDefault("shMs", 0)
 	If htMs <= 0 Or minute <= htMin Then
-		Return kick + minute * DateTime.TicksPerMinute
+		Return kick + minute * modPlatform.MinuteTicks
 	End If
 	If shMs > 0 Then
-		Return shMs + (minute - htMin) * DateTime.TicksPerMinute
+		Return shMs + (minute - htMin) * modPlatform.MinuteTicks
 	End If
 	' HT logged but no 2H yet — place beyond-HT minutes at HT whistle.
 	Return htMs
@@ -348,7 +344,7 @@ Public Sub ParseHHMMOnMatchDay(match As Map, hhmm As String) As Long
 			End Try
 		End If
 	End If
-	Dim atMs As Long = dayMs + hh * DateTime.TicksPerHour + mm * DateTime.TicksPerMinute
+	Dim atMs As Long = dayMs + hh * DateTime.TicksPerHour + mm * modPlatform.MinuteTicks
 	' Clock is before kick-off on that calendar day — the match crossed midnight.
 	If anchorMs > 0 And atMs + 12 * DateTime.TicksPerHour < anchorMs Then
 		atMs = atMs + DateTime.TicksPerDay
@@ -381,6 +377,11 @@ Public Sub CalculateMatchMinutesFrom(match As Map, allEvents As List) As Map
 			If ev.GetDefault("matchId", "") = matchId Then events.Add(ev)
 		Next
 	End If
+	' Prefer the playing minute stored on each whistle and sub. That clock already
+	' freezes through half time, so a break, a bench start, and a full-time whistle
+	' do not depend on iOS timestamp units.
+	Dim clocked As Map = MinutesFromPlayingClock(match, events)
+	If clocked.Size > 0 Then Return clocked
 	Dim windows As List = PlayWindows(match, events)
 	If windows.Size = 0 Then Return result
 
@@ -405,8 +406,16 @@ Public Sub CalculateMatchMinutesFrom(match As Map, allEvents As List) As Map
 		Dim atMs As Long = ToLong(item.Get("atMs"))
 		If atMs < matchStartMs Or atMs > matchEndMs Then Continue
 		If item.GetDefault("kind", "") = "SUB" Then
-			CloseStintAt(stints, item.GetDefault("playerOut", ""), atMs)
-			OpenStintAt(stints, item.GetDefault("playerIn", ""), atMs)
+			' A tap during the half-time break is a HT sub: off at the whistle, on at the restart.
+			Dim offAt As Long = atMs
+			Dim onAt As Long = atMs
+			Dim gap As Map = BreakGapContaining(atMs, windows)
+			If gap.IsInitialized And gap.ContainsKey("offMs") Then
+				offAt = ToLong(gap.Get("offMs"))
+				onAt = ToLong(gap.Get("onMs"))
+			End If
+			CloseStintAt(stints, item.GetDefault("playerOut", ""), offAt)
+			OpenStintAt(stints, item.GetDefault("playerIn", ""), onAt)
 		Else
 			CloseStintAt(stints, item.GetDefault("playerId", ""), atMs)
 		End If
@@ -419,17 +428,15 @@ Public Sub CalculateMatchMinutesFrom(match As Map, allEvents As List) As Map
 		Dim w1 As Long = ToLong(w.Get("endMs"))
 		If w1 > w0 Then capMs = capMs + (w1 - w0)
 	Next
-	Dim capMin As Int = Round(capMs / DateTime.TicksPerMinute)
+	Dim capMin As Int = Round(capMs / modPlatform.MinuteTicks)
 	If capMin < 1 Then capMin = 1
 
-	Dim p As Int
-	For p = 0 To stints.Size - 1
-		Dim pid As String = stints.GetKeyAt(p)
-		Dim list As List = stints.GetValueAt(p)
+	For Each pid As String In stints.Keys
+		Dim spells As List = stints.Get(pid)
 		Dim totalMs As Long = 0
 		Dim j As Int
-		For j = 0 To list.Size - 1
-			Dim stint As Map = list.Get(j)
+		For j = 0 To spells.Size - 1
+			Dim stint As Map = spells.Get(j)
 			Dim onMs As Long = ToLong(stint.Get("onMs"))
 			Dim offMs As Long = ToLong(stint.GetDefault("offMs", 0))
 			If offMs <= 0 Then offMs = matchEndMs
@@ -439,7 +446,7 @@ Public Sub CalculateMatchMinutesFrom(match As Map, allEvents As List) As Map
 				totalMs = totalMs + OverlapMs(onMs, offMs, ToLong(win.Get("startMs")), ToLong(win.Get("endMs")))
 			Next
 		Next
-		Dim mins As Int = Round(totalMs / DateTime.TicksPerMinute)
+		Dim mins As Int = Round(totalMs / modPlatform.MinuteTicks)
 		If mins < 0 Then mins = 0
 		If mins > capMin Then mins = capMin
 		If mins > 0 Then result.Put(pid, mins)
@@ -452,6 +459,20 @@ Private Sub EventDetailsMap(e As Map) As Map
 	Dim dObj As Object = e.GetDefault("details", Null)
 	If dObj <> Null And dObj Is Map Then
 		Return dObj
+	End If
+	If dObj <> Null And dObj Is String Then
+		Dim raw As String = dObj
+		raw = raw.Trim
+		If raw.StartsWith("{") Then
+			Try
+				Dim jp As JSONParser
+				jp.Initialize(raw)
+				Dim parsed As Map = jp.NextObject
+				Return parsed
+			Catch
+				Log("EventDetailsMap: " & LastException)
+			End Try
+		End If
 	End If
 	details.Initialize
 	Return details
@@ -471,15 +492,165 @@ Public Sub EventsNewestFirst(matchId As String) As List
 		For b = a + 1 To sorted.Size - 1
 			Dim ea As Map = sorted.Get(a)
 			Dim eb As Map = sorted.Get(b)
-			Dim ta As Long = ea.GetDefault("timestamp", 0)
-			Dim tb As Long = eb.GetDefault("timestamp", 0)
-			If tb > ta Then
+			' Later in the match first. The minute and clock on the card win over the stored timestamp.
+			If EarlierMoment(ea, eb) Then
 				sorted.Set(a, eb)
 				sorted.Set(b, ea)
 			End If
 		Next
 	Next
 	Return sorted
+End Sub
+
+' Minutes from details.minute on START / HALF_TIME / SECOND_HALF / END / SUB / RED_CARD.
+' Empty when full time has no playing minute (caller falls back to the wall clock).
+Private Sub MinutesFromPlayingClock(match As Map, events As List) As Map
+	Dim result As Map
+	result.Initialize
+	Dim endMin As Int = TypedPlayingMinute(events, "END", match, True)
+	If endMin <= 0 Then
+		Dim htMark As Int = TypedPlayingMinute(events, "HALF_TIME", match, False)
+		Dim shMark As Int = TypedPlayingMinute(events, "SECOND_HALF", match, False)
+		If htMark > 0 And shMark >= 0 Then
+			endMin = htMark + htMark
+		Else If htMark <= 0 Then
+			endMin = PlannedMatchMinutes(match)
+		End If
+	End If
+	If endMin <= 0 Then Return result
+	Dim subs As List = TeamASubEvents(match, events)
+	Dim starters As List = StarterIds(match, subs)
+	Dim stints As Map
+	stints.Initialize
+	Dim s As Int
+	For s = 0 To starters.Size - 1
+		OpenMinute(stints, starters.Get(s), 0)
+	Next
+	Dim i As Int
+	For i = 0 To subs.Size - 1
+		Dim subEv As Map = subs.Get(i)
+		Dim minute As Int = MapInt(subEv.GetDefault("minute", -1), -1)
+		If minute < 0 Then Continue
+		If minute > endMin Then minute = endMin
+		CloseMinute(stints, subEv.GetDefault("playerOut", ""), minute)
+		OpenMinute(stints, subEv.GetDefault("playerIn", ""), minute)
+	Next
+	For i = 0 To events.Size - 1
+		Dim e As Map = events.Get(i)
+		If e.GetDefault("type", "") <> "RED_CARD" Then Continue
+		Dim d As Map = EventDetailsMap(e)
+		If d.GetDefault("team", "A") = "B" Then Continue
+		Dim pid As String = d.GetDefault("player", "")
+		If pid = "" Then pid = d.GetDefault("playerId", "")
+		If pid = "" Then pid = d.GetDefault("scorer", "")
+		If pid = "" Then Continue
+		Dim redMin As Int = EventPlayingMinute(match, e, d)
+		If redMin < 0 Then Continue
+		If redMin > endMin Then redMin = endMin
+		CloseMinute(stints, pid, redMin)
+	Next
+	For Each pid2 As String In stints.Keys
+		Dim spells As List = stints.Get(pid2)
+		Dim total As Int = 0
+		Dim j As Int
+		For j = 0 To spells.Size - 1
+			Dim stint As Map = spells.Get(j)
+			Dim onMin As Int = MapInt(stint.GetDefault("onMin", 0), 0)
+			Dim offMin As Int = MapInt(stint.GetDefault("offMin", -1), -1)
+			If offMin < 0 Then offMin = endMin
+			If offMin > endMin Then offMin = endMin
+			If offMin > onMin Then total = total + (offMin - onMin)
+		Next
+		If total > endMin Then total = endMin
+		If total > 0 Then result.Put(pid2, total)
+	Next
+	Return result
+End Sub
+
+Private Sub TypedPlayingMinute(events As List, eventType As String, match As Map, lastOne As Boolean) As Int
+	Dim found As Int = -1
+	Dim foundTs As Long = 0
+	Dim i As Int
+	For i = 0 To events.Size - 1
+		Dim e As Map = events.Get(i)
+		If e.GetDefault("type", "") <> eventType Then Continue
+		Dim d As Map = EventDetailsMap(e)
+		Dim minute As Int = EventPlayingMinute(match, e, d)
+		If minute < 0 Then Continue
+		Dim ts As Long = ToLong(e.GetDefault("timestamp", 0))
+		Dim take As Boolean = False
+		If found = -1 Then
+			take = True
+		Else If lastOne And minute > found Then
+			take = True
+		Else If lastOne = False And minute < found Then
+			take = True
+		Else If minute = found And ((lastOne And ts >= foundTs) Or (lastOne = False And ts <= foundTs)) Then
+			take = True
+		End If
+		If take Then
+			found = minute
+			foundTs = ts
+		End If
+	Next
+	Return found
+End Sub
+
+' details.minute is the match clock logged with the event (half time already frozen).
+Private Sub EventPlayingMinute(match As Map, e As Map, details As Map) As Int
+	If details.IsInitialized And details.ContainsKey("minute") Then
+		Dim minute As Int = MapInt(details.Get("minute"), -1)
+		If minute >= 0 Then Return minute
+	End If
+	Dim atMs As Long = ToLong(e.GetDefault("timestamp", 0))
+	If atMs <= 0 Then Return -1
+	Return PlayingMinuteAt(match, atMs)
+End Sub
+
+Private Sub MapInt(v As Object, defaultValue As Int) As Int
+	If v = Null Then Return defaultValue
+	Try
+		Dim n As Int = v
+		Return n
+	Catch
+		Try
+			Dim d As Double = v
+			Return Round(d)
+		Catch
+			Return defaultValue
+		End Try
+	End Try
+End Sub
+
+Private Sub OpenMinute(stints As Map, playerId As String, onMin As Int)
+	If playerId = "" Or onMin < 0 Then Return
+	Dim list As List = StintList(stints, playerId)
+	Dim i As Int
+	For i = 0 To list.Size - 1
+		Dim stint As Map = list.Get(i)
+		If MapInt(stint.GetDefault("offMin", -1), -1) < 0 Then Return
+	Next
+	Dim s As Map
+	s.Initialize
+	s.Put("onMin", onMin)
+	s.Put("offMin", -1)
+	list.Add(s)
+End Sub
+
+Private Sub CloseMinute(stints As Map, playerId As String, offMin As Int)
+	If playerId = "" Or stints.ContainsKey(playerId) = False Then Return
+	Dim list As List = stints.Get(playerId)
+	Dim i As Int = list.Size - 1
+	Do While i >= 0
+		Dim stint As Map = list.Get(i)
+		If MapInt(stint.GetDefault("offMin", -1), -1) < 0 Then
+			Dim onMin As Int = MapInt(stint.GetDefault("onMin", 0), 0)
+			If offMin < onMin Then offMin = onMin
+			stint.Put("offMin", offMin)
+			Return
+		End If
+		i = i - 1
+	Loop
 End Sub
 
 ' Playing windows only. The half-time break is the gap between them.
@@ -505,7 +676,7 @@ Private Sub PlayWindows(match As Map, events As List) As List
 			endMs = shMs + (htMs - startMs)
 		Else If startMs > 0 Then
 			Dim planned As Int = PlannedMatchMinutes(match)
-			endMs = startMs + planned * DateTime.TicksPerMinute
+			endMs = startMs + planned * modPlatform.MinuteTicks
 		End If
 	End If
 
@@ -531,6 +702,29 @@ Private Sub PlannedMatchMinutes(match As Map) As Int
 	End If
 	If planned < 1 Then planned = 60
 	Return planned
+End Sub
+
+' The half-time break is the gap between two play windows. A sub in that gap
+' takes the outgoing player off at the whistle and brings the next player on at the restart.
+Private Sub BreakGapContaining(atMs As Long, windows As List) As Map
+	Dim none As Map
+	none.Initialize
+	If windows.IsInitialized = False Or windows.Size < 2 Then Return none
+	Dim i As Int
+	For i = 0 To windows.Size - 2
+		Dim w0 As Map = windows.Get(i)
+		Dim w1 As Map = windows.Get(i + 1)
+		Dim gapStart As Long = ToLong(w0.Get("endMs"))
+		Dim gapEnd As Long = ToLong(w1.Get("startMs"))
+		If gapEnd > gapStart And atMs >= gapStart And atMs <= gapEnd Then
+			Dim hit As Map
+			hit.Initialize
+			hit.Put("offMs", gapStart)
+			hit.Put("onMs", gapEnd)
+			Return hit
+		End If
+	Next
+	Return none
 End Sub
 
 Private Sub WindowMap(startMs As Long, endMs As Long) As Map
@@ -560,7 +754,7 @@ Private Sub AlignToKickDay(startMs As Long, atMs As Long) As Long
 	If colon < 1 Then Return atMs
 	Dim hh As Int = clock.SubString2(0, colon)
 	Dim mm As Int = clock.SubString(colon + 1)
-	Dim placed As Long = LocalMidnight(startMs) + hh * DateTime.TicksPerHour + mm * DateTime.TicksPerMinute
+	Dim placed As Long = LocalMidnight(startMs) + hh * DateTime.TicksPerHour + mm * modPlatform.MinuteTicks
 	If placed + 12 * DateTime.TicksPerHour < startMs Then placed = placed + DateTime.TicksPerDay
 	Return placed
 End Sub
@@ -609,6 +803,7 @@ Private Sub TeamASubEvents(match As Map, events As List) As List
 		Dim row As Map
 		row.Initialize
 		row.Put("atMs", EventAtMs(match, e, d))
+		row.Put("minute", EventPlayingMinute(match, e, d))
 		row.Put("playerOut", pout)
 		row.Put("playerIn", pin)
 		subs.Add(row)
@@ -683,10 +878,9 @@ Private Sub StarterIds(match As Map, subs As List) As List
 		If pin <> "" And firstAction.ContainsKey(pin) = False Then firstAction.Put(pin, "on")
 	Next
 	Dim slots As Map = CopyLineup(match)
-	For i = 0 To slots.Size - 1
-		Dim slotId As String = "" & slots.GetKeyAt(i)
+	For Each slotId As String In slots.Keys
 		If FormationSlotAllowed(match, slotId) Then
-			Dim pid As String = "" & slots.GetValueAt(i)
+			Dim pid As String = "" & slots.Get(slotId)
 			If pid <> "" And pid <> "null" And seen.ContainsKey(pid) = False Then
 				If firstAction.GetDefault(pid, "") <> "on" Then
 					seen.Put(pid, True)
@@ -699,12 +893,11 @@ Private Sub StarterIds(match As Map, subs As List) As List
 	Dim rawIds As Map
 	rawIds.Initialize
 	Dim raw As Map = CopyLineup(match)
-	For i = 0 To raw.Size - 1
-		Dim rawPid As String = "" & raw.GetValueAt(i)
-		If rawPid <> "" And rawPid <> "null" Then rawIds.Put(rawPid, True)
+	For Each rawPid As Object In raw.Values
+		Dim rawText As String = "" & rawPid
+		If rawText <> "" And rawText <> "null" Then rawIds.Put(rawText, True)
 	Next
-	For i = 0 To firstAction.Size - 1
-		Dim oid As String = firstAction.GetKeyAt(i)
+	For Each oid As String In firstAction.Keys
 		If seen.ContainsKey(oid) = False And rawIds.ContainsKey(oid) = False Then
 			Dim action As String = firstAction.Get(oid)
 			If action = "off" Then
@@ -723,11 +916,9 @@ Public Sub LineupAfterSubs(match As Map) As Map
 	filtered.Initialize
 	If match.IsInitialized = False Then Return filtered
 	Dim slots As Map = CopyLineup(match)
-	Dim i As Int
-	For i = 0 To slots.Size - 1
-		Dim slotId As String = "" & slots.GetKeyAt(i)
+	For Each slotId As String In slots.Keys
 		If FormationSlotAllowed(match, slotId) = False Then Continue
-		filtered.Put(slotId, "" & slots.GetValueAt(i))
+		filtered.Put(slotId, "" & slots.Get(slotId))
 	Next
 	Dim changes As List
 	changes.Initialize
@@ -762,10 +953,9 @@ Public Sub LineupAfterSubs(match As Map) As Map
 		Dim pin As String = change.GetDefault("playerIn", "")
 		If pout = "" Or pin = "" Then Continue
 		Dim foundSlot As String = ""
-		Dim s As Int
-		For s = 0 To filtered.Size - 1
-			If ("" & filtered.GetValueAt(s)) = pout Then
-				foundSlot = "" & filtered.GetKeyAt(s)
+		For Each slotKey As String In filtered.Keys
+			If ("" & filtered.Get(slotKey)) = pout Then
+				foundSlot = slotKey
 				Exit
 			End If
 		Next
@@ -794,9 +984,8 @@ Private Sub CopyLineup(match As Map) As Map
 	If obj = Null Or (obj Is Map) = False Then obj = match.GetDefault("tacticalLineup", Null)
 	If obj <> Null And obj Is Map Then
 		Dim src As Map = obj
-		Dim i As Int
-		For i = 0 To src.Size - 1
-			lineup.Put(src.GetKeyAt(i), src.GetValueAt(i))
+		For Each key As Object In src.Keys
+			lineup.Put(key, src.Get(key))
 		Next
 	End If
 	Return lineup
@@ -856,7 +1045,7 @@ Private Sub SortByAtMs(items As List)
 		For b = a + 1 To items.Size - 1
 			Dim ra As Map = items.Get(a)
 			Dim rb As Map = items.Get(b)
-			If ToLong(rb.GetDefault("atMs", 0)) < ToLong(ra.GetDefault("atMs", 0)) Then
+			If EarlierMoment(rb, ra) Then
 				items.Set(a, rb)
 				items.Set(b, ra)
 			End If
@@ -864,24 +1053,78 @@ Private Sub SortByAtMs(items As List)
 	Next
 End Sub
 
+' True when a is earlier in the match than b.
+' The minute and clock written on the event come first. The stored timestamp is only a tie-break.
+Private Sub EarlierMoment(a As Map, b As Map) As Boolean
+	Dim ma As Int = RowMinute(a)
+	Dim mb As Int = RowMinute(b)
+	If ma >= 0 And mb >= 0 And ma <> mb Then Return ma < mb
+	Dim ca As Int = ShownClockMinute(a)
+	Dim cb As Int = ShownClockMinute(b)
+	If ca >= 0 And cb >= 0 And ca <> cb Then Return ca < cb
+	Dim ta As Long = RowMillis(a)
+	Dim tb As Long = RowMillis(b)
+	Return ta < tb
+End Sub
+
+Private Sub RowMinute(ev As Map) As Int
+	If ev.ContainsKey("minute") Then
+		Dim direct As Int = MapInt(ev.Get("minute"), -1)
+		If direct >= 0 Then Return direct
+	End If
+	Dim d As Map = EventDetailsMap(ev)
+	If d.ContainsKey("minute") Then Return MapInt(d.Get("minute"), -1)
+	Return -1
+End Sub
+
+Private Sub ShownClockMinute(ev As Map) As Int
+	Dim d As Map = EventDetailsMap(ev)
+	Dim clock As String = "" & d.GetDefault("clockTime", "")
+	clock = clock.Trim
+	Dim colon As Int = clock.IndexOf(":")
+	If colon < 1 Then Return -1
+	Try
+		Dim hh As Int = clock.SubString2(0, colon)
+		Dim mm As Int = clock.SubString(colon + 1)
+		If hh < 0 Or hh > 23 Or mm < 0 Or mm > 59 Then Return -1
+		Return hh * 60 + mm
+	Catch
+		Return -1
+	End Try
+End Sub
+
+Private Sub RowMillis(ev As Map) As Long
+	If ev.ContainsKey("atMs") Then
+		Dim at As Long = ToLong(ev.Get("atMs"))
+		If at > 0 Then Return at
+	End If
+	Return ToLong(ev.GetDefault("timestamp", 0))
+End Sub
+
 Private Sub ToLong(v As Object) As Long
 	If v = Null Then Return 0
 	Try
+		' A JSON number arrives as a Double. Casting that straight to Long throws.
+		If v Is Double Then
+			Dim d As Double = v
+			If d <= 0 Then Return 0
+			Return modPlatform.NormalizeTicks(d)
+		End If
 		Dim n As Long = v
-		If n <> 0 Then Return n
+		If n <> 0 Then Return modPlatform.NormalizeTicks(n)
 	Catch
 		Log(LastException.Message)
 	End Try
 	Try
-		Dim s As String = ("" & v).Trim
+		Dim s As String = "" & v
+		s = s.Trim
 		If s = "" Or s = "0" Then Return 0
 		If s.Contains("T") Then
-			Dim jo As JavaObject
-			jo.InitializeStatic("java.time.Instant")
-			Dim inst As JavaObject = jo.RunMethod("parse", Array(s))
-			Return inst.RunMethod("toEpochMilli", Null)
+			Dim ms As Long = modPlatform.ParseIsoMillis(s)
+			If ms < 0 Then Return 0
+			Return ms
 		End If
-		Return s
+		Return modPlatform.NormalizeTicks(s)
 	Catch
 		Return 0
 	End Try

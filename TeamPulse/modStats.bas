@@ -1,4 +1,5 @@
 ﻿B4A=true
+B4i=true
 Group=Default Group
 ModulesStructureVersion=1
 Type=StaticCode
@@ -59,20 +60,37 @@ Public Sub Compute(club As Map, matches As List, events As List, selectedMatchId
 	For Each m As Map In clubMatches
 		Dim scoreA As Int = m.GetDefault("scoreA", 0)
 		Dim scoreB As Int = m.GetDefault("scoreB", 0)
+		Dim resultA As Int = scoreA
+		Dim resultB As Int = scoreB
+		If scoreA = scoreB Then
+			Dim shoot As Map = modLocal.ShootoutState(m.GetDefault("id", ""))
+			If modLocal.IsFlag(shoot, "decided") Then
+				If shoot.GetDefault("winner", "") = "A" Then
+					resultA = scoreA + 1
+				Else If shoot.GetDefault("winner", "") = "B" Then
+					resultB = scoreB + 1
+				End If
+			End If
+		End If
 		Dim clubScore, oppScore As Int
 		If isTeam Then
+			Dim clubResult, oppResult As Int
 			If m.GetDefault("isHome", True) = True Then
 				clubScore = scoreA
 				oppScore = scoreB
+				clubResult = resultA
+				oppResult = resultB
 			Else
 				clubScore = scoreB
 				oppScore = scoreA
+				clubResult = resultB
+				oppResult = resultA
 			End If
 			goalsFor = goalsFor + clubScore
 			goalsAgainst = goalsAgainst + oppScore
-			If clubScore > oppScore Then
+			If clubResult > oppResult Then
 				wins = wins + 1
-			Else If clubScore = oppScore Then
+			Else If clubResult = oppResult Then
 				draws = draws + 1
 			Else
 				losses = losses + 1
@@ -94,8 +112,8 @@ Public Sub Compute(club As Map, matches As List, events As List, selectedMatchId
 		If isTeam Then
 			Dim teamA As List = m.GetDefault("teamA", EmptyList)
 			Dim teamB As List = m.GetDefault("teamB", EmptyList)
-			ApplyResultToTeam(teamA, playerStats, scoreA, scoreB)
-			ApplyResultToTeam(teamB, playerStats, scoreB, scoreA)
+			ApplyResultToTeam(teamA, playerStats, resultA, resultB)
+			ApplyResultToTeam(teamB, playerStats, resultB, resultA)
 		End If
 		
 		Dim mPlayerStats As Map = m.GetDefault("playerStats", EmptyMap)

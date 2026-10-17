@@ -1,4 +1,5 @@
 ﻿B4A=true
+B4i=true
 Group=Default Group
 ModulesStructureVersion=1
 Type=Class
@@ -25,18 +26,18 @@ Private Sub B4XPage_Appear
 End Sub
 
 Private Sub BuildUI
-	Dim chrome As Map = modUI.AddPageChrome(Root, "Roster", "btnBack", "btnAdd", "+", True)
+	Dim chrome As Map = modUI.AddPageChrome(Me, Root, "Roster", "btnBack", "btnAdd", "+", True)
 	lblTitle = chrome.Get("TitleLabel")
 	Dim top As Int = chrome.Get("ContentTop")
-	clv = modUI.AddCustomListViewThemed(Root, 0, top, Root.Width, Root.Height - top - 48dip, Me, "clv", True)
+	clv = modUI.AddCustomListViewThemed(Root, 0, top, modUI.ViewWidth(Root), modUI.ViewHeight(Root) - top - 48dip, Me, "clv", True)
 	
 	Dim hint As Label
 	hint.Initialize("")
 	hint.Text = "Tap a player to edit · long-press to remove"
-	hint.TextSize = 12
+	modUI.SetTextSize(hint, 12)
 	hint.TextColor = modConfig.COLOR_DARK_MUTED
-	hint.Gravity = Gravity.CENTER
-	Root.AddView(hint, 16dip, Root.Height - 40dip, Root.Width - 32dip, 32dip)
+	modUI.SetAlign(hint, "CENTER", "CENTER")
+	Root.AddView(hint, 16dip, modUI.ViewHeight(Root) - 40dip, modUI.ViewWidth(Root) - 32dip, 32dip)
 End Sub
 
 Public Sub Refresh
@@ -45,10 +46,10 @@ Public Sub Refresh
 	clv.Clear
 	modUI.ApplyDarkListBackground(clv, modConfig.COLOR_DARK_BG)
 	Dim members As List = club.GetDefault("members", EmptyList)
-	Dim cardW As Int = Root.Width - 24dip
+	Dim cardW As Int = modUI.ViewWidth(Root) - 24dip
 	If members.Size = 0 Then
 		Dim empty As Panel = modUI.CreateSimpleRowThemed(cardW, "No members yet. Tap + to add.", "", True)
-		empty.SetLayout(0, 0, cardW, modUI.SimpleRowHeight)
+		modUI.PlaceView(empty, 0, 0, cardW, modUI.SimpleRowHeight)
 		clv.Add(empty, "")
 		Return
 	End If
@@ -57,7 +58,7 @@ Public Sub Refresh
 		Dim m As Map = members.Get(i)
 		Dim card As Panel = modUI.CreatePlayerCardThemed(cardW, m, "CONFIRMED", False, True)
 		Dim h As Int = modUI.PlayerCardHeight + 8dip
-		card.SetLayout(0, 0, cardW, h)
+		modUI.PlaceView(card, 0, 0, cardW, h)
 		clv.Add(card, m.GetDefault("id", ""))
 		Dim iv As ImageView = modUI.PlayerCardImageView(card)
 		If iv.IsInitialized Then
@@ -83,7 +84,7 @@ Private Sub LoadAvatar(iv As ImageView, url As String)
 			Dim bmp As Bitmap = job.GetBitmap
 			If bmp <> Null And bmp.IsInitialized Then
 				iv.Bitmap = bmp
-				iv.Gravity = Gravity.FILL
+				modUI.SetImageFill(iv)
 			End If
 		Catch
 			Log("Roster LoadAvatar: " & LastException.Message)
@@ -105,7 +106,7 @@ Private Sub btnAdd_Click
 	If newId = "" Then
 		Dim err As String = modSupabase.LastError
 		If err = "" Then err = "Could not add player"
-		ToastMessageShow(err, True)
+		modPlatform.Toast(err, True)
 		Return
 	End If
 	modDb.FetchInitialData

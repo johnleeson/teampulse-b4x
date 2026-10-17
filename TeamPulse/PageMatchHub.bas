@@ -1,4 +1,5 @@
 ﻿B4A=true
+B4i=true
 Group=Default Group
 ModulesStructureVersion=1
 Type=Class
@@ -35,46 +36,46 @@ Private Sub B4XPage_Appear
 End Sub
 
 Private Sub BuildUI
-	Dim chrome As Map = modUI.AddPageChrome(Root, "", "btnBack", "", "", True)
+	Dim chrome As Map = modUI.AddPageChrome(Me, Root, "", "btnBack", "", "", True)
 	contentTop = chrome.Get("ContentTop")
 	Dim chromeTitle As Label = chrome.Get("TitleLabel")
 	chromeTitle.Visible = False
 	
 	Dim headerLeft As Int = 16dip
-	Dim headerW As Int = Root.Width - 32dip
+	Dim headerW As Int = modUI.ViewWidth(Root) - 32dip
 	Dim hy As Int = contentTop
 	
 	lblTitle.Initialize("")
-	lblTitle.TextSize = 18
-	lblTitle.Typeface = Typeface.DEFAULT_BOLD
+	modUI.SetTextSize(lblTitle, 18)
+	modUI.SetBold(lblTitle, True)
 	lblTitle.TextColor = modConfig.COLOR_DARK_TEXT
-	lblTitle.SingleLine = False
-	lblTitle.Gravity = Bit.Or(Gravity.TOP, Gravity.LEFT)
+	modUI.SetSingleLine(lblTitle, False)
+	modUI.SetAlign(lblTitle, "TOP", "LEFT")
 	Root.AddView(lblTitle, headerLeft, hy, headerW, 48dip)
 	hy = hy + 52dip
 	
 	lblWhen.Initialize("")
-	lblWhen.TextSize = 12
+	modUI.SetTextSize(lblWhen, 12)
 	lblWhen.TextColor = modConfig.COLOR_DARK_MUTED
-	lblWhen.SingleLine = True
+	modUI.SetSingleLine(lblWhen, True)
 	Root.AddView(lblWhen, headerLeft, hy, headerW, 18dip)
 	hy = hy + 22dip
 	
 	lblLocation.Initialize("")
-	lblLocation.TextSize = 12
+	modUI.SetTextSize(lblLocation, 12)
 	lblLocation.TextColor = modConfig.COLOR_DARK_MUTED
-	lblLocation.SingleLine = True
+	modUI.SetSingleLine(lblLocation, True)
 	Root.AddView(lblLocation, headerLeft, hy, headerW, 18dip)
 	hy = hy + 26dip
 	
 	listTop = hy
-	sv.Initialize(1400dip)
-	Root.AddView(sv, 0, listTop, Root.Width, Root.Height - listTop)
+	modUI.InitScroll(sv, 1400dip)
+	Root.AddView(sv, 0, listTop, modUI.ViewWidth(Root), modUI.ViewHeight(Root) - listTop)
 	content = sv.Panel
 	content.Color = modConfig.COLOR_DARK_BG
 	
 	Dim y As Int = 8dip
-	Dim w As Int = Root.Width - 32dip
+	Dim w As Int = modUI.ViewWidth(Root) - 32dip
 	Dim h As Int = modUI.HubNavCardHeight
 	Dim gap As Int = 12dip
 	
@@ -106,52 +107,52 @@ Private Sub BuildUI
 	content.AddView(c7, 16dip, y, w, h)
 	y = y + h + 24dip
 	
-	btnLive.Initialize("btnGoLive")
+	modUI.InitButton(Me, btnLive, "btnGoLive")
 	btnLive.Text = "Go Live"
 	btnLive.Color = modConfig.COLOR_DANGER
-	btnLive.TextColor = Colors.White
+	modUI.SetButtonTextColor(btnLive, Colors.White)
 	content.AddView(btnLive, 16dip, y, w, 52dip)
 	y = y + 64dip
 	
-	btnDelete.Initialize("btnDelete")
+	modUI.InitButton(Me, btnDelete, "btnDelete")
 	btnDelete.Text = "Delete match"
 	btnDelete.Color = 0xFF7F1D1D
-	btnDelete.TextColor = Colors.White
+	modUI.SetButtonTextColor(btnDelete, Colors.White)
 	content.AddView(btnDelete, 16dip, y, w, 48dip)
 	y = y + 64dip
 	
-	content.Height = Max(y, Root.Height)
-	sv.Panel.Height = content.Height
+	content.Height = Max(y, modUI.ViewHeight(Root))
+	modUI.SetScrollContentHeight(sv, content.Height)
 End Sub
 
 Private Sub CreateDarkHubCard(Width As Int, title As String, subtitle As String, EventName As String) As Panel
 	Dim card As Panel
 	card.Initialize(EventName)
-	card.Background = modUI.RoundedBg(modConfig.COLOR_DARK_CARD, 14dip)
+	modUI.RoundView(card, modConfig.COLOR_DARK_CARD, 14dip)
 	
 	Dim lblT As Label
 	lblT.Initialize("")
 	lblT.Text = title
-	lblT.TextSize = 16
+	modUI.SetTextSize(lblT, 16)
 	lblT.TextColor = modConfig.COLOR_DARK_TEXT
-	lblT.Typeface = Typeface.DEFAULT_BOLD
-	lblT.SingleLine = True
+	modUI.SetBold(lblT, True)
+	modUI.SetSingleLine(lblT, True)
 	card.AddView(lblT, 16dip, 14dip, Width - 48dip, 24dip)
 	
 	Dim lblS As Label
 	lblS.Initialize("")
 	lblS.Text = subtitle
-	lblS.TextSize = 12
+	modUI.SetTextSize(lblS, 12)
 	lblS.TextColor = modConfig.COLOR_DARK_MUTED
-	lblS.SingleLine = True
+	modUI.SetSingleLine(lblS, True)
 	card.AddView(lblS, 16dip, 40dip, Width - 48dip, 20dip)
 	
 	Dim chev As Label
 	chev.Initialize("")
 	chev.Text = ">"
-	chev.TextSize = 18
+	modUI.SetTextSize(chev, 18)
 	chev.TextColor = modConfig.COLOR_ACCENT
-	chev.Gravity = Gravity.CENTER
+	modUI.SetAlign(chev, "CENTER", "CENTER")
 	card.AddView(chev, Width - 36dip, 18dip, 28dip, 36dip)
 	Return card
 End Sub
@@ -241,16 +242,16 @@ Private Sub btnDelete_Click
 	If Result <> xui.DialogResponse_Positive Then Return
 	Dim mid As String = match.GetDefault("id", "")
 	If mid = "" Then
-		ToastMessageShow("Match not found", False)
+		modPlatform.Toast("Match not found", False)
 		Return
 	End If
 	If modDb.DeleteMatch(mid) = False Then
 		Dim err As String = modSupabase.LastError
 		If err = "" Then err = "Delete failed"
-		ToastMessageShow(err, True)
+		modPlatform.Toast(err, True)
 		Return
 	End If
-	ToastMessageShow("Match deleted", False)
+	modPlatform.Toast("Match deleted", False)
 	B4XPages.ShowPage("Matches")
 End Sub
 

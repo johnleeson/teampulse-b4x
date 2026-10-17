@@ -12,10 +12,13 @@
 ```
 TeamPulse/
   B4A/
-    TeamPulse.b4a          ← open this in B4A
+    TeamPulse.b4a          ← open this in B4A (Windows)
+    Files/
+  B4i/
+    TeamPulse.b4i          ← open this in B4i (Mac or hosted builder)
     Files/
   B4XMainPage.bas
-  Page*.bas / mod*.bas
+  Page*.bas / mod*.bas     ← shared by both projects
   Shared Files/
 ```
 
@@ -37,7 +40,7 @@ Defaults in [`TeamPulse/modConfig.bas`](../TeamPulse/modConfig.bas) match `teamp
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 
-Change those constants if you point at another project. Auth uses email/password against Supabase Auth; session tokens are stored under `File.DirInternal`.
+Change those constants if you point at another project. Auth uses email/password against Supabase Auth; session tokens are stored in the app folder (`File.DirInternal` on Android, `File.DirDocuments` on iOS).
 
 ## Reference source
 
@@ -53,6 +56,12 @@ Behaviour and schema are based on a **read-only** copy of [johnleeson/teampulse-
 6. Add members → create match → confirm availability → set formation → Go Live
 7. Log goals → End match → open Stats
 
-## B4i later
+## iOS (B4i)
 
-Add a `B4i/` sibling of `B4A/` and share the `mod*` / `Page*` modules. Supabase REST + Auth work the same; no `google-services` required.
+B4i does not compile on Windows. Open `TeamPulse/B4i/TeamPulse.b4i` on a Mac, or use the hosted builder.
+
+Libraries: iPhone, iHttp, iHUD, iMedia, JSON, XUI, XUI Views, B4XPages, B4XCollections, xCustomListView.
+
+Signing is not stored in the project. Set the certificate and provision profile in the B4i IDE before you compile.
+
+The project already includes `NSPhotoLibraryUsageDescription` (“Attach a photo to a match event.”) so event photos can use the photo library. App Transport Security stays on; Supabase is HTTPS, so no ATS exception is required. No `google-services` file is used.

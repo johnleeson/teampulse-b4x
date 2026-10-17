@@ -1,4 +1,5 @@
 ﻿B4A=true
+B4i=true
 Group=Default Group
 ModulesStructureVersion=1
 Type=Class
@@ -31,24 +32,24 @@ Private Sub B4XPage_Appear
 End Sub
 
 Private Sub BuildUI
-	Dim chrome As Map = modUI.AddPageChrome(Root, "Squad", "btnBack", "", "", True)
+	Dim chrome As Map = modUI.AddPageChrome(Me, Root, "Squad", "btnBack", "", "", True)
 	Dim top As Int = chrome.Get("ContentTop")
 	
 	lblCount.Initialize("")
-	lblCount.TextSize = 13
+	modUI.SetTextSize(lblCount, 13)
 	lblCount.TextColor = modConfig.COLOR_DARK_TEXT
-	lblCount.Typeface = Typeface.DEFAULT_BOLD
-	Root.AddView(lblCount, 16dip, top, Root.Width - 32dip, 22dip)
+	modUI.SetBold(lblCount, True)
+	Root.AddView(lblCount, 16dip, top, modUI.ViewWidth(Root) - 32dip, 22dip)
 	
 	Dim hint As Label
 	hint.Initialize("")
 	hint.Text = "Tap to cycle Maybe → In → Out · ✎ to edit"
-	hint.TextSize = 11
+	modUI.SetTextSize(hint, 11)
 	hint.TextColor = modConfig.COLOR_DARK_MUTED
-	Root.AddView(hint, 16dip, top + 24dip, Root.Width - 32dip, 18dip)
+	Root.AddView(hint, 16dip, top + 24dip, modUI.ViewWidth(Root) - 32dip, 18dip)
 	
 	Dim listTop As Int = top + 50dip
-	clv = modUI.AddCustomListViewThemed(Root, 0, listTop, Root.Width, Root.Height - listTop, Me, "clv", True)
+	clv = modUI.AddCustomListViewThemed(Root, 0, listTop, modUI.ViewWidth(Root), modUI.ViewHeight(Root) - listTop, Me, "clv", True)
 End Sub
 
 Private Sub Load
@@ -68,7 +69,7 @@ Public Sub Refresh
 	memberCount = members.Size
 	Dim availability As Map = match.GetDefault("availability", EmptyMap)
 	If availability.IsInitialized = False Then availability.Initialize
-	Dim cardW As Int = Root.Width - 24dip
+	Dim cardW As Int = modUI.ViewWidth(Root) - 24dip
 	Dim i As Int
 	For i = 0 To members.Size - 1
 		Dim mem As Map = members.Get(i)
@@ -76,7 +77,7 @@ Public Sub Refresh
 		Dim av As String = availability.GetDefault(id, "UNKNOWN")
 		Dim card As Panel = modUI.CreatePlayerCard(cardW, mem, av, False)
 		Dim h As Int = modUI.PlayerCardHeight + 8dip
-		card.SetLayout(0, 0, cardW, h)
+		modUI.PlaceView(card, 0, 0, cardW, h)
 		
 		Dim editLeft As Int = cardW - 12dip - 56dip - 10dip - 40dip
 		Dim editTop As Int = (modUI.PlayerCardHeight - 40dip) / 2
@@ -87,14 +88,14 @@ Public Sub Refresh
 		End If
 		
 		Dim btnEdit As Button
-		btnEdit.Initialize("btnEditPlayer")
+		modUI.InitButton(Me, btnEdit, "btnEditPlayer")
 		btnEdit.Text = "✎"
 		btnEdit.Tag = id
 		btnEdit.Color = Colors.Transparent
-		btnEdit.TextColor = modConfig.COLOR_ACCENT
-		btnEdit.TextSize = 18
-		btnEdit.Gravity = Gravity.CENTER
-		btnEdit.Typeface = Typeface.DEFAULT_BOLD
+		modUI.SetButtonTextColor(btnEdit, modConfig.COLOR_ACCENT)
+		modUI.SetTextSize(btnEdit, 18)
+		modUI.SetAlign(btnEdit, "CENTER", "CENTER")
+		modUI.SetBold(btnEdit, True)
 		card.AddView(btnEdit, editLeft, editTop, 40dip, 40dip)
 		
 		clv.Add(card, id)
@@ -141,7 +142,7 @@ Private Sub LoadAvatar(iv As ImageView, url As String)
 			Dim bmp As Bitmap = job.GetBitmap
 			If bmp <> Null And bmp.IsInitialized Then
 				iv.Bitmap = bmp
-				iv.Gravity = Gravity.FILL
+				modUI.SetImageFill(iv)
 			End If
 		Catch
 			Log("LoadAvatar: " & LastException.Message)
@@ -175,7 +176,7 @@ Private Sub clv_ItemClick (Index As Int, Value As Object)
 End Sub
 
 Private Sub btnEditPlayer_Click
-	Dim b As Button = Sender
+	Dim b As Button = modUI.ClickedButton(Sender)
 	Dim id As String = ""
 	If b.Tag <> Null Then id = b.Tag
 	If id = "" Then Return
@@ -186,12 +187,12 @@ Private Sub btnEditPlayer_Click
 End Sub
 
 Private Sub PersistSignedUp(availability As Map)
-	Dim signed As List
-	signed.Initialize
+	Dim confirmedIds As List
+	confirmedIds.Initialize
 	For Each k As String In availability.Keys
-		If availability.Get(k) = "CONFIRMED" Then signed.Add(k)
+		If availability.Get(k) = "CONFIRMED" Then confirmedIds.Add(k)
 	Next
-	match.Put("signedUpPlayerIds", signed)
+	match.Put("signedUpPlayerIds", confirmedIds)
 End Sub
 
 Private Sub btnBack_Click

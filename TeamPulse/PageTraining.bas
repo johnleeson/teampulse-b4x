@@ -1,4 +1,5 @@
 ﻿B4A=true
+B4i=true
 Group=Default Group
 ModulesStructureVersion=1
 Type=Class
@@ -23,25 +24,25 @@ Private Sub B4XPage_Appear
 End Sub
 
 Private Sub BuildUI
-	Dim chrome As Map = modUI.AddPageChrome(Root, "Training", "btnBack", "btnNew", "+", True)
+	Dim chrome As Map = modUI.AddPageChrome(Me, Root, "Training", "btnBack", "btnNew", "+", True)
 	Dim top As Int = chrome.Get("ContentTop")
-	clv = modUI.AddCustomListViewThemed(Root, 0, top, Root.Width, Root.Height - top, Me, "clv", True)
+	clv = modUI.AddCustomListViewThemed(Root, 0, top, modUI.ViewWidth(Root), modUI.ViewHeight(Root) - top, Me, "clv", True)
 End Sub
 
 Public Sub Refresh
 	clv.Clear
 	modUI.ApplyDarkListBackground(clv, modConfig.COLOR_DARK_BG)
 	Dim sessions As List = modAppState.TrainingsForCurrentUser
-	Dim cardW As Int = Root.Width - 24dip
+	Dim cardW As Int = modUI.ViewWidth(Root) - 24dip
 	If modAppState.ClubsForCurrentUser.Size = 0 Then
 		Dim noClub As Panel = modUI.CreateSimpleRowThemed(cardW, "Join a club before logging training.", "", True)
-		noClub.SetLayout(0, 0, cardW, modUI.SimpleRowHeight)
+		modUI.PlaceView(noClub, 0, 0, cardW, modUI.SimpleRowHeight)
 		clv.Add(noClub, "")
 		Return
 	End If
 	If sessions.Size = 0 Then
 		Dim empty As Panel = modUI.CreateSimpleRowThemed(cardW, "No sessions yet. Tap + to log training.", "", True)
-		empty.SetLayout(0, 0, cardW, modUI.SimpleRowHeight)
+		modUI.PlaceView(empty, 0, 0, cardW, modUI.SimpleRowHeight)
 		clv.Add(empty, "")
 		Return
 	End If
@@ -55,7 +56,7 @@ Public Sub Refresh
 		wrap.Color = modConfig.COLOR_DARK_BG
 		Dim card As Panel = CreateSessionCard(cardW, s, showClub)
 		wrap.AddView(card, 12dip, 4dip, cardW, 78dip)
-		wrap.SetLayout(0, 0, Root.Width, h)
+		modUI.PlaceView(wrap, 0, 0, modUI.ViewWidth(Root), h)
 		clv.Add(wrap, s.GetDefault("id", ""))
 	Next
 End Sub
@@ -63,15 +64,15 @@ End Sub
 Private Sub CreateSessionCard(Width As Int, session As Map, showClub As Boolean) As Panel
 	Dim p As Panel
 	p.Initialize("")
-	p.Background = modUI.RoundedBg(modConfig.COLOR_DARK_CARD, 12dip)
+	modUI.RoundView(p, modConfig.COLOR_DARK_CARD, 12dip)
 	Dim title As String = FormatSessionDate(session.GetDefault("date", ""))
 	Dim lblTitle As Label
 	lblTitle.Initialize("")
 	lblTitle.Text = title
-	lblTitle.TextSize = 16
+	modUI.SetTextSize(lblTitle, 16)
 	lblTitle.TextColor = modConfig.COLOR_DARK_TEXT
-	lblTitle.Typeface = Typeface.DEFAULT_BOLD
-	lblTitle.SingleLine = True
+	modUI.SetBold(lblTitle, True)
+	modUI.SetSingleLine(lblTitle, True)
 	p.AddView(lblTitle, 14dip, 10dip, Width - 28dip, 24dip)
 	
 	Dim presentN As Int = IdCount(session.GetDefault("presentIds", Null))
@@ -90,9 +91,9 @@ Private Sub CreateSessionCard(Width As Int, session As Map, showClub As Boolean)
 	Dim lblMeta As Label
 	lblMeta.Initialize("")
 	lblMeta.Text = line2
-	lblMeta.TextSize = 12
+	modUI.SetTextSize(lblMeta, 12)
 	lblMeta.TextColor = modConfig.COLOR_DARK_MUTED
-	lblMeta.SingleLine = True
+	modUI.SetSingleLine(lblMeta, True)
 	p.AddView(lblMeta, 14dip, 36dip, Width - 28dip, 20dip)
 	Return p
 End Sub
@@ -146,7 +147,7 @@ End Sub
 
 Private Sub btnNew_Click
 	If modAppState.ClubsForCurrentUser.Size = 0 Then
-		ToastMessageShow("Join a club before logging training", False)
+		modPlatform.Toast("Join a club before logging training", False)
 		Return
 	End If
 	modAppState.EditingExistingTraining = False

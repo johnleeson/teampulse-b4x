@@ -1,4 +1,5 @@
 ﻿B4A=true
+B4i=true
 Group=Default Group
 ModulesStructureVersion=1
 Type=StaticCode
@@ -221,15 +222,21 @@ End Sub
 
 Private Sub ParseTimestamp(v As Object) As Long
 	Try
-		If v Is Long Then Return v
-		If v Is Double Then Return v
+		If v Is Double Then
+			Dim d As Double = v
+			If d <= 0 Then Return 0
+			Return modPlatform.NormalizeTicks(d)
+		End If
+		If v Is Long Or v Is Int Then
+			Dim n As Long = v
+			If n <= 0 Then Return 0
+			Return modPlatform.NormalizeTicks(n)
+		End If
 		Dim s As String = v
 		If s = "" Then Return DateTime.Now
-		' ISO-8601 → millis via Java Instant when possible
-		Dim jo As JavaObject
-		jo.InitializeStatic("java.time.Instant")
-		Dim inst As JavaObject = jo.RunMethod("parse", Array(s))
-		Return inst.RunMethod("toEpochMilli", Null)
+		Dim ms As Long = modPlatform.ParseIsoMillis(s)
+		If ms < 0 Then Return DateTime.Now
+		Return ms
 	Catch
 		Return DateTime.Now
 	End Try
@@ -239,27 +246,19 @@ End Sub
 Private Sub MillisOf(v As Object) As Long
 	If v = Null Then Return DateTime.Now
 	Try
-		Dim n As Long = v
-		Return n
-	Catch
-		Try
+		If v Is Double Then
 			Dim d As Double = v
-			Return d
-		Catch
-			Return ParseTimestamp(v)
-		End Try
+			Return modPlatform.NormalizeTicks(d)
+		End If
+		Dim n As Long = v
+		Return modPlatform.NormalizeTicks(n)
+	Catch
+		Return ParseTimestamp(v)
 	End Try
 End Sub
 
 Private Sub IsoTimestamp(ms As Long) As String
-	Try
-		Dim inst As JavaObject
-		inst.InitializeStatic("java.time.Instant")
-		Return inst.RunMethodJO("ofEpochMilli", Array(ms)).RunMethod("toString", Null)
-	Catch
-		DateTime.DateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
-		Return DateTime.Date(ms)
-	End Try
+	Return modPlatform.FormatIsoMillis(ms)
 End Sub
 
 Private Sub NormalizeIsoDate(v As Object) As String
@@ -567,11 +566,15 @@ End Sub
 Public Sub RoleListHas(roles As Object, role As String) As Boolean
 	If roles = Null Then Return False
 	Dim want As String = role.ToUpperCase
-	If (roles Is List) = False Then Return ("" & roles).ToUpperCase = want
+	If (roles Is List) = False Then
+		Dim roleText As String = "" & roles
+		Return roleText.ToUpperCase = want
+	End If
 	Dim lst As List = roles
 	Dim i As Int
 	For i = 0 To lst.Size - 1
-		If ("" & lst.Get(i)).ToUpperCase = want Then Return True
+		Dim itemText As String = "" & lst.Get(i)
+		If itemText.ToUpperCase = want Then Return True
 	Next
 	Return False
 End Sub
@@ -906,11 +909,5 @@ Public Sub GenerateInviteCode As String
 End Sub
 
 Public Sub GenerateUuid As String
-	Try
-		Dim uuid As JavaObject
-		uuid.InitializeStatic("java.util.UUID")
-		Return uuid.RunMethodJO("randomUUID", Null).RunMethod("toString", Null)
-	Catch
-		Return "local-" & DateTime.Now & "-" & Rnd(1000, 9999)
-	End Try
+	Return modPlatform.NewUuid
 End Sub

@@ -1,4 +1,5 @@
 ﻿B4A=true
+B4i=true
 Group=Default Group
 ModulesStructureVersion=1
 Type=Class
@@ -29,10 +30,10 @@ Private Sub B4XPage_Appear
 End Sub
 
 Private Sub BuildChrome
-	Dim chrome As Map = modUI.AddPageChrome(Root, "Match stats", "btnBack", "", "", True)
+	Dim chrome As Map = modUI.AddPageChrome(Me, Root, "Match stats", "btnBack", "", "", True)
 	Dim top As Int = chrome.Get("ContentTop")
-	sv.Initialize(4000dip)
-	Root.AddView(sv, 0, top, Root.Width, Root.Height - top)
+	modUI.InitScroll(sv, 4000dip)
+	Root.AddView(sv, 0, top, modUI.ViewWidth(Root), modUI.ViewHeight(Root) - top)
 	content = sv.Panel
 	content.Color = modConfig.COLOR_DARK_BG
 End Sub
@@ -74,15 +75,16 @@ End Sub
 Private Sub BuildBody
 	content.RemoveAllViews
 	Dim y As Int = 12dip
-	Dim w As Int = Root.Width - 32dip
+	Dim w As Int = modUI.ViewWidth(Root) - 32dip
 	
 	Dim hdr As Label
 	hdr.Initialize("")
-	hdr.Text = match.GetDefault("title", "Match") & "  ·  " & match.GetDefault("scoreA", 0) & "-" & match.GetDefault("scoreB", 0)
-	hdr.TextSize = 14
+	hdr.Text = match.GetDefault("title", "Match") & "  ·  " & modLocal.ScoreLine(match)
+	modUI.SetTextSize(hdr, 14)
 	hdr.TextColor = modConfig.COLOR_DARK_MUTED
-	content.AddView(hdr, 16dip, y, w, 22dip)
-	y = y + 32dip
+	modUI.SetSingleLine(hdr, False)
+	content.AddView(hdr, 16dip, y, w, 40dip)
+	y = y + 46dip
 	
 	y = BuildGoalsSection(y, w)
 	y = BuildAssistsSection(y, w)
@@ -90,18 +92,18 @@ Private Sub BuildBody
 	y = BuildMinutesSection(y, w)
 	
 	y = y + 24dip
-	content.Height = Max(y, Root.Height)
-	sv.Panel.Height = content.Height
+	content.Height = Max(y, modUI.ViewHeight(Root))
+	modUI.SetScrollContentHeight(sv, content.Height)
 End Sub
 
 Private Sub AddSectionHeader(y As Int, text As String) As Int
 	Dim lbl As Label
 	lbl.Initialize("")
 	lbl.Text = text
-	lbl.TextSize = 11
-	lbl.Typeface = Typeface.DEFAULT_BOLD
+	modUI.SetTextSize(lbl, 11)
+	modUI.SetBold(lbl, True)
 	lbl.TextColor = modConfig.COLOR_DARK_MUTED
-	content.AddView(lbl, 16dip, y, Root.Width - 32dip, 18dip)
+	content.AddView(lbl, 16dip, y, modUI.ViewWidth(Root) - 32dip, 18dip)
 	Return y + 22dip
 End Sub
 
@@ -109,7 +111,7 @@ Private Sub AddEmptyRow(y As Int, w As Int, msg As String) As Int
 	Dim lbl As Label
 	lbl.Initialize("")
 	lbl.Text = msg
-	lbl.TextSize = 13
+	modUI.SetTextSize(lbl, 13)
 	lbl.TextColor = modConfig.COLOR_DARK_MUTED
 	content.AddView(lbl, 16dip, y, w, 24dip)
 	Return y + 32dip
@@ -118,21 +120,21 @@ End Sub
 Private Sub AddStatRow(y As Int, w As Int, leftText As String, rightText As String) As Int
 	Dim row As Panel
 	row.Initialize("")
-	row.Background = modUI.RoundedBg(modConfig.COLOR_DARK_CARD, 10dip)
+	modUI.RoundView(row, modConfig.COLOR_DARK_CARD, 10dip)
 	content.AddView(row, 16dip, y, w, 48dip)
 	Dim l As Label
 	l.Initialize("")
 	l.Text = leftText
-	l.TextSize = 14
+	modUI.SetTextSize(l, 14)
 	l.TextColor = modConfig.COLOR_DARK_TEXT
-	l.Gravity = Gravity.CENTER_VERTICAL
+	modUI.SetAlign(l, "CENTER", "LEFT")
 	row.AddView(l, 12dip, 0, w - 100dip, 48dip)
 	Dim r As Label
 	r.Initialize("")
 	r.Text = rightText
-	r.TextSize = 13
+	modUI.SetTextSize(r, 13)
 	r.TextColor = modConfig.COLOR_DARK_MUTED
-	r.Gravity = Bit.Or(Gravity.CENTER_VERTICAL, Gravity.RIGHT)
+	modUI.SetAlign(r, "CENTER", "RIGHT")
 	row.AddView(r, w - 96dip, 0, 84dip, 48dip)
 	Return y + 56dip
 End Sub

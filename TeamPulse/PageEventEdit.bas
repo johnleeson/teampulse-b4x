@@ -1,4 +1,5 @@
 ﻿B4A=true
+B4i=true
 Group=Default Group
 ModulesStructureVersion=1
 Type=Class
@@ -14,9 +15,25 @@ Sub Class_Globals
 	Private match As Map
 	Private club As Map
 	Private ev As Map
+#if B4A
 	Private edtMinute As EditText
+#else if B4i
+	Private edtMinute As TextField
+#End If
+#if B4A
 	Private edtClock As EditText
+#else if B4i
+	Private edtClock As TextField
+#End If
+#if B4A
 	Private edtContent As EditText
+#else if B4i
+	Private edtContent As TextView
+#End If
+#if B4i
+	Private cam As Camera
+	Private camReady As Boolean
+#End If
 	Private lblType As Label
 	Private lblHint As Label
 	Private lblTeam As Label
@@ -32,6 +49,7 @@ Sub Class_Globals
 	Private selectedOwnGoal As Boolean
 	Private selectedPlayerId As String
 	Private selectedAssistId As String
+	Private selectedScored As Boolean
 	Private syncing As Boolean
 	Private photoPath As String
 	Private lblPhoto As Label
@@ -45,6 +63,7 @@ Public Sub Initialize
 	selectedOwnGoal = False
 	selectedPlayerId = ""
 	selectedAssistId = ""
+	selectedScored = False
 	photoPath = ""
 	syncing = False
 End Sub
@@ -60,26 +79,26 @@ Private Sub B4XPage_Appear
 End Sub
 
 Private Sub BuildUI
-	Dim chrome As Map = modUI.AddPageChrome(Root, "Edit event", "btnBack", "", "", True)
+	Dim chrome As Map = modUI.AddPageChrome(Me, Root, "Edit event", "btnBack", "", "", True)
 	Dim top As Int = chrome.Get("ContentTop")
-	sv.Initialize(1600dip)
-	Root.AddView(sv, 0, top, Root.Width, Root.Height - top)
+	modUI.InitScroll(sv, 1600dip)
+	Root.AddView(sv, 0, top, modUI.ViewWidth(Root), modUI.ViewHeight(Root) - top)
 	content = sv.Panel
 	content.Color = modConfig.COLOR_DARK_BG
 	
 	Dim y As Int = 8dip
-	Dim w As Int = Root.Width - 32dip
+	Dim w As Int = modUI.ViewWidth(Root) - 32dip
 	
 	lblType.Initialize("")
-	lblType.TextSize = 14
+	modUI.SetTextSize(lblType, 14)
 	lblType.TextColor = modConfig.COLOR_ACCENT
-	lblType.Typeface = Typeface.DEFAULT_BOLD
+	modUI.SetBold(lblType, True)
 	content.AddView(lblType, 16dip, y, w, 22dip)
 	y = y + 26dip
 	
 	lblHint.Initialize("")
 	lblHint.Text = "Clock and minutes stay in sync (HT break frozen)."
-	lblHint.TextSize = 11
+	modUI.SetTextSize(lblHint, 11)
 	lblHint.TextColor = modConfig.COLOR_DARK_MUTED
 	content.AddView(lblHint, 16dip, y, w, 18dip)
 	y = y + 26dip
@@ -87,17 +106,17 @@ Private Sub BuildUI
 	Dim lblClock As Label
 	lblClock.Initialize("")
 	lblClock.Text = "REAL TIME"
-	lblClock.TextSize = 11
+	modUI.SetTextSize(lblClock, 11)
 	lblClock.TextColor = modConfig.COLOR_DARK_MUTED
-	lblClock.Typeface = Typeface.DEFAULT_BOLD
+	modUI.SetBold(lblClock, True)
 	content.AddView(lblClock, 16dip, y, w / 2 - 8dip, 16dip)
 	
 	Dim lblMin As Label
 	lblMin.Initialize("")
 	lblMin.Text = "MATCH MINUTE"
-	lblMin.TextSize = 11
+	modUI.SetTextSize(lblMin, 11)
 	lblMin.TextColor = modConfig.COLOR_DARK_MUTED
-	lblMin.Typeface = Typeface.DEFAULT_BOLD
+	modUI.SetBold(lblMin, True)
 	content.AddView(lblMin, 16dip + w / 2, y, w / 2 - 8dip, 16dip)
 	y = y + 20dip
 	
@@ -107,82 +126,82 @@ Private Sub BuildUI
 	
 	edtMinute.Initialize("edtMinute")
 	modUI.StyleEditTextDark(edtMinute, "0")
-	edtMinute.InputType = edtMinute.INPUT_TYPE_NUMBERS
+	modUI.SetKeyboard(edtMinute, "numbers")
 	content.AddView(edtMinute, 16dip + w / 2, y, w / 2 - 8dip, 48dip)
 	y = y + 60dip
 	
 	lblTeam.Initialize("")
 	lblTeam.Text = "TEAM"
-	lblTeam.TextSize = 11
+	modUI.SetTextSize(lblTeam, 11)
 	lblTeam.TextColor = modConfig.COLOR_DARK_MUTED
-	lblTeam.Typeface = Typeface.DEFAULT_BOLD
+	modUI.SetBold(lblTeam, True)
 	content.AddView(lblTeam, 16dip, y, w, 16dip)
 	y = y + 20dip
-	btnTeam.Initialize("btnTeam")
+	modUI.InitButton(Me, btnTeam, "btnTeam")
 	StylePicker(btnTeam)
 	content.AddView(btnTeam, 16dip, y, w, 48dip)
 	y = y + 60dip
 	
 	lblPlayer.Initialize("")
 	lblPlayer.Text = "PLAYER"
-	lblPlayer.TextSize = 11
+	modUI.SetTextSize(lblPlayer, 11)
 	lblPlayer.TextColor = modConfig.COLOR_DARK_MUTED
-	lblPlayer.Typeface = Typeface.DEFAULT_BOLD
+	modUI.SetBold(lblPlayer, True)
 	content.AddView(lblPlayer, 16dip, y, w, 16dip)
 	y = y + 20dip
-	btnPlayer.Initialize("btnPlayer")
+	modUI.InitButton(Me, btnPlayer, "btnPlayer")
 	StylePicker(btnPlayer)
 	content.AddView(btnPlayer, 16dip, y, w, 48dip)
 	y = y + 60dip
 	
 	lblAssist.Initialize("")
 	lblAssist.Text = "ASSIST / PLAYER ON"
-	lblAssist.TextSize = 11
+	modUI.SetTextSize(lblAssist, 11)
 	lblAssist.TextColor = modConfig.COLOR_DARK_MUTED
-	lblAssist.Typeface = Typeface.DEFAULT_BOLD
+	modUI.SetBold(lblAssist, True)
 	content.AddView(lblAssist, 16dip, y, w, 16dip)
 	y = y + 20dip
-	btnAssist.Initialize("btnAssist")
+	modUI.InitButton(Me, btnAssist, "btnAssist")
 	StylePicker(btnAssist)
 	content.AddView(btnAssist, 16dip, y, w, 48dip)
 	y = y + 60dip
 	
 	lblContent.Initialize("")
 	lblContent.Text = "NOTE"
-	lblContent.TextSize = 11
+	modUI.SetTextSize(lblContent, 11)
 	lblContent.TextColor = modConfig.COLOR_DARK_MUTED
-	lblContent.Typeface = Typeface.DEFAULT_BOLD
+	modUI.SetBold(lblContent, True)
 	content.AddView(lblContent, 16dip, y, w, 16dip)
 	y = y + 20dip
 	edtContent.Initialize("edtContent")
 	modUI.StyleEditTextDark(edtContent, "Note text")
-	edtContent.SingleLine = False
-	edtContent.Gravity = Bit.Or(Gravity.TOP, Gravity.LEFT)
+	modUI.SetSingleLine(edtContent, False)
+	modUI.SetAlign(edtContent, "TOP", "LEFT")
 	content.AddView(edtContent, 16dip, y, w, 96dip)
 	y = y + 108dip
 	
-	btnPhoto.Initialize("btnPhoto")
+	modUI.InitButton(Me, btnPhoto, "btnPhoto")
 	btnPhoto.Text = "Add photo"
 	btnPhoto.Color = modConfig.COLOR_DARK_CHIP
-	btnPhoto.TextColor = modConfig.COLOR_DARK_TEXT
-	btnPhoto.TextSize = 13
-	btnPhoto.Typeface = Typeface.DEFAULT_BOLD
+	modUI.SetButtonTextColor(btnPhoto, modConfig.COLOR_DARK_TEXT)
+	modUI.SetTextSize(btnPhoto, 13)
+	modUI.SetBold(btnPhoto, True)
 	content.AddView(btnPhoto, 16dip, y, w, 44dip)
 	y = y + 52dip
 	
 	lblPhoto.Initialize("")
-	lblPhoto.TextSize = 12
+	modUI.SetTextSize(lblPhoto, 12)
 	lblPhoto.TextColor = modConfig.COLOR_DARK_MUTED
-	lblPhoto.SingleLine = True
+	modUI.SetSingleLine(lblPhoto, True)
 	content.AddView(lblPhoto, 16dip, y, w, 20dip)
 	y = y + 32dip
 	
 	Dim btnSave As Button
-	btnSave.Initialize("btnSave")
+	modUI.InitButton(Me, btnSave, "btnSave")
 	btnSave.Text = "Save changes"
 	btnSave.Color = modConfig.COLOR_SUCCESS
-	btnSave.TextColor = Colors.White
-	btnSave.Typeface = Typeface.DEFAULT_BOLD
+	modUI.SetButtonTextColor(btnSave, Colors.White)
+	modUI.SetBold(btnSave, True)
 	content.AddView(btnSave, 16dip, y, w, 52dip)
 	y = y + 72dip
 	
@@ -191,17 +210,19 @@ End Sub
 
 Private Sub StylePicker(b As Button)
 	b.Color = modConfig.COLOR_DARK_CARD
-	b.TextColor = modConfig.COLOR_DARK_TEXT
-	b.TextSize = 15
-	b.Gravity = Bit.Or(Gravity.CENTER_VERTICAL, Gravity.LEFT)
+	modUI.SetButtonTextColor(b, modConfig.COLOR_DARK_TEXT)
+	modUI.SetTextSize(b, 15)
+	modUI.SetAlign(b, "CENTER", "LEFT")
+#if B4A
 	b.Padding = Array As Int(14dip, 0, 14dip, 0)
-	b.Typeface = Typeface.DEFAULT_BOLD
+#End If
+	modUI.SetBold(b, True)
 End Sub
 
 Private Sub Load
 	ev = modAppState.FindEvent(modAppState.SelectedEventId)
 	If ev.ContainsKey("id") = False Then
-		ToastMessageShow("Event not found", False)
+		modPlatform.Toast("Event not found", False)
 		B4XPages.ShowPage("LiveFeed")
 		Return
 	End If
@@ -210,6 +231,7 @@ Private Sub Load
 	
 	Dim etype As String = ev.GetDefault("type", "EVENT")
 	lblType.Text = FriendlyType(etype)
+	If etype = "SHOOTOUT" And modLocal.IsFlag(EventDetails(ev), "suddenDeath") Then lblType.Text = "SUDDEN DEATH"
 	Dim details As Map = EventDetails(ev)
 	syncing = True
 	edtMinute.Text = "" & details.GetDefault("minute", 0)
@@ -226,6 +248,7 @@ Private Sub Load
 	FillMembers
 	selectedPlayerId = details.GetDefault("scorer", details.GetDefault("player", details.GetDefault("playerOut", "")))
 	selectedAssistId = details.GetDefault("assist", details.GetDefault("playerIn", ""))
+	selectedScored = modLocal.IsFlag(details, "scored")
 	ApplyTypeLayout
 	RefreshPickerLabels
 	AutoFillContent
@@ -255,6 +278,8 @@ Private Sub FriendlyType(t As String) As String
 			Return "CORNER"
 		Case "PENALTY"
 			Return "PENALTY"
+		Case "SHOOTOUT"
+			Return "SHOOTOUT"
 		Case "POSITION"
 			Return "POSITION CHANGE"
 		Case Else
@@ -264,7 +289,8 @@ End Sub
 
 Private Sub ApplyTypeLayout
 	Dim etype As String = ev.GetDefault("type", "")
-	Dim showTeam As Boolean = (etype = "GOAL" Or etype = "CORNER" Or etype = "PENALTY")
+	Dim shootKind As String = EventDetails(ev).GetDefault("kind", "")
+	Dim showTeam As Boolean = (etype = "GOAL" Or etype = "CORNER" Or etype = "PENALTY" Or (etype = "SHOOTOUT" And shootKind <> "setup"))
 	Dim showPlayer As Boolean = (etype = "GOAL" Or etype = "SUB" Or etype = "YELLOW_CARD" Or etype = "RED_CARD")
 	Dim showAssist As Boolean = (etype = "GOAL" Or etype = "SUB")
 	Dim editNote As Boolean = (etype = "COMMENT" Or etype = "HALF_TIME" Or etype = "SECOND_HALF" Or etype = "START" Or etype = "END")
@@ -272,6 +298,10 @@ Private Sub ApplyTypeLayout
 	
 	If etype = "GOAL" And (selectedTeamB Or selectedOwnGoal) Then
 		showAssist = False
+	End If
+	If etype = "SHOOTOUT" And shootKind <> "setup" Then
+		showAssist = True
+		showPlayer = (selectedTeamB = False)
 	End If
 	
 	lblTeam.Visible = showTeam
@@ -287,26 +317,40 @@ Private Sub ApplyTypeLayout
 		lblPlayer.Text = "SCORER"
 		lblAssist.Text = "ASSIST (optional)"
 		lblContent.Text = "PREVIEW"
-		edtContent.Enabled = False
+		SetNoteEditable(False)
 	Else If etype = "SUB" Then
 		lblPlayer.Text = "PLAYER OFF"
 		lblAssist.Text = "PLAYER ON"
 		lblContent.Text = "PREVIEW"
-		edtContent.Enabled = False
+		SetNoteEditable(False)
 	Else If etype = "YELLOW_CARD" Or etype = "RED_CARD" Then
 		lblPlayer.Text = "PLAYER"
 		lblContent.Text = "PREVIEW"
-		edtContent.Enabled = False
+		SetNoteEditable(False)
 	Else If etype = "CORNER" Or etype = "PENALTY" Or etype = "POSITION" Then
 		lblContent.Text = "PREVIEW"
-		edtContent.Enabled = False
+		SetNoteEditable(False)
+	Else If etype = "SHOOTOUT" Then
+		lblContent.Text = "PREVIEW"
+		lblAssist.Text = "RESULT"
+		lblPlayer.Text = "TAKER"
+		SetNoteEditable(False)
 	Else If etype = "COMMENT" Then
 		lblContent.Text = "NOTE"
-		edtContent.Enabled = True
+		SetNoteEditable(True)
 	Else
 		lblContent.Text = "TEXT"
-		edtContent.Enabled = editNote
+		SetNoteEditable(editNote)
 	End If
+End Sub
+
+' B4A EditText uses Enabled. B4i TextView uses Editable.
+Private Sub SetNoteEditable(on As Boolean)
+#if B4A
+	edtContent.Enabled = on
+#else if B4i
+	edtContent.Editable = on
+#End If
 End Sub
 
 Private Sub EventDetails(e As Map) As Map
@@ -369,6 +413,12 @@ Private Sub RefreshPickerLabels
 		Else
 			btnAssist.Text = NameOf(selectedAssistId)
 		End If
+	Else If etype = "SHOOTOUT" Then
+		If selectedScored Then
+			btnAssist.Text = "Scored"
+		Else
+			btnAssist.Text = "Missed"
+		End If
 	Else
 		If selectedAssistId = "" Then
 			btnAssist.Text = "Choose player…"
@@ -404,6 +454,17 @@ Private Sub AutoFillContent
 		edtContent.Text = pn
 	Else If etype = "CORNER" Or etype = "PENALTY" Then
 		edtContent.Text = SetPieceContent(etype, selectedTeamB)
+	Else If etype = "SHOOTOUT" Then
+		Dim shootDetails As Map = EventDetails(ev)
+		If shootDetails.GetDefault("kind", "") = "setup" Then
+			edtContent.Text = modLocal.ShootoutSetupContent(modLocal.AsInt(shootDetails.GetDefault("kicksEach", 0)), shootDetails.GetDefault("firstTeam", "A"))
+		Else
+			Dim taker As String = ""
+			Dim side As String = "A"
+			If selectedTeamB Then side = "B"
+			If selectedTeamB = False Then taker = NameOf(selectedPlayerId)
+			edtContent.Text = modLocal.ShootoutKickContent(side, selectedScored, taker)
+		End If
 	End If
 	syncing = False
 End Sub
@@ -435,6 +496,10 @@ Private Sub edtClock_TextChanged (Old As String, New As String)
 End Sub
 
 Private Sub btnTeam_Click
+	If ev.GetDefault("type", "") = "SHOOTOUT" Then
+		modPlatform.Toast("Side follows the kick order", False)
+		Return
+	End If
 	Dim opts As List
 	opts.Initialize
 	opts.AddAll(Array As String("Our team", "Opponent"))
@@ -476,7 +541,7 @@ Private Sub btnPlayer_Click
 		Return
 	End If
 	If memberNames.Size = 0 Then
-		ToastMessageShow("No players in club", False)
+		modPlatform.Toast("No players in club", False)
 		Return
 	End If
 	Wait For (PickMember(selectedPlayerId, "Choose player")) Complete (pid As String)
@@ -494,7 +559,7 @@ Private Sub PickGoalScorer As ResumableSub
 		opts.Add("Opposition goal")
 	Else
 		If memberNames.Size = 0 Then
-			ToastMessageShow("No players in club", False)
+			modPlatform.Toast("No players in club", False)
 			Return "__cancel__"
 		End If
 		Dim i As Int
@@ -518,16 +583,28 @@ End Sub
 
 Private Sub btnAssist_Click
 	Dim etype As String = ev.GetDefault("type", "")
+	Dim opts As List
+	opts.Initialize
+	Dim tmpl As B4XListTemplate
+	tmpl.Initialize
+	If etype = "SHOOTOUT" Then
+		opts.AddAll(Array As String("Scored", "Missed"))
+		tmpl.Options = opts
+		If selectedScored Then tmpl.SelectedItem = "Scored" Else tmpl.SelectedItem = "Missed"
+		dialog.Title = "Result"
+		Wait For (dialog.ShowTemplate(tmpl, "OK", "", "Cancel")) Complete (Result As Int)
+		If Result <> xui.DialogResponse_Positive Then Return
+		selectedScored = (tmpl.SelectedItem = "Scored")
+		RefreshPickerLabels
+		AutoFillContent
+		Return
+	End If
 	If etype = "GOAL" Then
-		Dim opts As List
-		opts.Initialize
 		opts.Add("(none)")
 		Dim i As Int
 		For i = 0 To memberNames.Size - 1
 			opts.Add(memberNames.Get(i))
 		Next
-		Dim tmpl As B4XListTemplate
-		tmpl.Initialize
 		tmpl.Options = opts
 		dialog.Title = "Assist"
 		Wait For (dialog.ShowTemplate(tmpl, "OK", "", "Cancel")) Complete (Result As Int)
@@ -543,7 +620,7 @@ Private Sub btnAssist_Click
 		Return
 	End If
 	If memberNames.Size = 0 Then
-		ToastMessageShow("No players in club", False)
+		modPlatform.Toast("No players in club", False)
 		Return
 	End If
 	Wait For (PickMember(selectedAssistId, "Player on")) Complete (pid As String)
@@ -578,23 +655,52 @@ Private Sub RefreshPhotoLabel
 End Sub
 
 Private Sub btnPhoto_Click
+#if B4A
 	Dim cc As ContentChooser
 	cc.Initialize("cc")
 	cc.Show("image/*", "Choose photo")
+#else if B4i
+	Dim parentPg As Page
+	parentPg = B4XPages.GetNativeParent(Me)
+	If camReady = False Then
+		cam.Initialize("cam", parentPg)
+		camReady = True
+	End If
+	cam.SelectFromSavedPhotos(parentPg.RootPanel, cam.TYPE_IMAGE)
+#End If
 End Sub
 
+#if B4A
 Private Sub cc_Result (Success As Boolean, Dir As String, FileName As String)
 	If Success = False Then Return
 	Try
 		Dim destName As String = "note_" & modAppState.NewId & ".jpg"
-		File.Copy(Dir, FileName, File.DirInternal, destName)
+		File.Copy(Dir, FileName, modPlatform.AppDir, destName)
 		photoPath = destName
 		RefreshPhotoLabel
 	Catch
-		ToastMessageShow("Could not attach photo", False)
+		modPlatform.Toast("Could not attach photo", False)
 		Log(LastException.Message)
 	End Try
 End Sub
+#End If
+
+#if B4i
+Private Sub cam_Complete (Success As Boolean, Image As Bitmap, VideoPath As String)
+	If Success = False Or Image.IsInitialized = False Then Return
+	Try
+		Dim destName As String = "note_" & modAppState.NewId & ".jpg"
+		Dim out As OutputStream = File.OpenOutput(modPlatform.AppDir, destName, False)
+		Image.WriteToStream(out, 80, "JPEG")
+		out.Close
+		photoPath = destName
+		RefreshPhotoLabel
+	Catch
+		modPlatform.Toast("Could not attach photo", False)
+		Log(LastException.Message)
+	End Try
+End Sub
+#End If
 
 Private Sub btnSave_Click
 	Dim details As Map = EventDetails(ev)
@@ -632,7 +738,7 @@ Private Sub btnSave_Click
 			ev.Put("content", "Opposition goal")
 		Else
 			If selectedPlayerId = "" Then
-				ToastMessageShow("Choose a scorer", False)
+				modPlatform.Toast("Choose a scorer", False)
 				Return
 			End If
 			details.Put("team", "A")
@@ -643,7 +749,7 @@ Private Sub btnSave_Click
 		End If
 	Else If etype = "SUB" Then
 		If selectedPlayerId = "" Or selectedAssistId = "" Then
-			ToastMessageShow("Need player off and player on", False)
+			modPlatform.Toast("Need player off and player on", False)
 			Return
 		End If
 		details.Put("team", "A")
@@ -652,7 +758,7 @@ Private Sub btnSave_Click
 		ev.Put("content", NameOf(selectedPlayerId) & " → " & NameOf(selectedAssistId))
 	Else If etype = "YELLOW_CARD" Or etype = "RED_CARD" Then
 		If selectedPlayerId = "" Then
-			ToastMessageShow("Choose a player", False)
+			modPlatform.Toast("Choose a player", False)
 			Return
 		End If
 		details.Put("team", "A")
@@ -665,13 +771,33 @@ Private Sub btnSave_Click
 			details.Put("team", "A")
 		End If
 		ev.Put("content", SetPieceContent(etype, selectedTeamB))
+	Else If etype = "SHOOTOUT" Then
+		If details.GetDefault("kind", "") = "setup" Then
+			ev.Put("content", modLocal.ShootoutSetupContent(modLocal.AsInt(details.GetDefault("kicksEach", 0)), details.GetDefault("firstTeam", "A")))
+		Else
+			Dim side As String = "A"
+			If selectedTeamB Then side = "B"
+			If side = "A" And selectedPlayerId = "" Then
+				modPlatform.Toast("Choose a taker", False)
+				Return
+			End If
+			If side = "A" Then
+				details.Put("player", selectedPlayerId)
+			Else
+				details.Put("player", "")
+			End If
+			details.Put("scored", selectedScored)
+			Dim takerName As String = ""
+			If side = "A" Then takerName = NameOf(selectedPlayerId)
+			ev.Put("content", modLocal.ShootoutKickContent(side, selectedScored, takerName))
+		End If
 	Else If etype = "POSITION" Then
 		' Minute and clock are already stored. The switch itself stays as recorded.
 		ev.Put("content", ev.GetDefault("content", ""))
 	Else
 		Dim note As String = edtContent.Text.Trim
 		If note = "" Then
-			ToastMessageShow("Enter note text", False)
+			modPlatform.Toast("Enter note text", False)
 			Return
 		End If
 		ev.Put("content", note)
@@ -684,7 +810,7 @@ Private Sub btnSave_Click
 	modDb.SaveEvent(ev)
 	modAppState.UpsertEvent(ev)
 	CallSubDelayed(B4XPages.GetPage("LiveFeed"), "RecomputeScoresAndStats")
-	ToastMessageShow("Event saved", False)
+	modPlatform.Toast("Event saved", False)
 	B4XPages.ShowPage("LiveFeed")
 End Sub
 

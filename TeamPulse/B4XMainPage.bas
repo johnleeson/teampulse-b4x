@@ -1,4 +1,5 @@
 ﻿B4A=true
+B4i=true
 Group=Default Group
 ModulesStructureVersion=1
 Type=Class
@@ -19,6 +20,10 @@ Sub Class_Globals
 	Private syncRunning As Boolean
 	Private syncAgain As Boolean
 	Private wantPull As Boolean
+	Private didPull As Boolean
+	Private refreshDash As Boolean
+	' Set from Application_Background before KickSync runs, so a save already in flight cannot end the task early.
+	Private bgPending As Boolean
 End Sub
 
 Public Sub Initialize
@@ -30,6 +35,9 @@ Private Sub B4XPage_Created (Root1 As B4XView)
 	modAppState.Initialize
 	BuildUI
 	B4XPages.SetTitle(Me, modConfig.APP_NAME)
+#if B4i
+	Main.NavControl.NavigationBarVisible = False
+#End If
 	
 	Dim login As PageLogin
 	login.Initialize
@@ -122,9 +130,11 @@ Private Sub BuildUI
 	lblStatus = lbl
 	lbl.Text = "Starting TeamPulse..."
 	lbl.TextColor = Colors.White
-	lbl.Gravity = Gravity.CENTER
-	lbl.TextSize = 18
-	Root.AddView(lbl, 0, Root.Height * 0.4, Root.Width, 80dip)
+	modUI.SetAlign(lbl, "CENTER", "CENTER")
+	modUI.SetTextSize(lbl, 18)
+	Dim w As Int = modUI.ViewWidth(Root)
+	Dim h As Int = modUI.ViewHeight(Root)
+	Root.AddView(lbl, 0, h * 0.4, w, 80dip)
 End Sub
 
 Private Sub StartApp
@@ -174,11 +184,21 @@ Public Sub RefreshDataAndGoDashboard
 	CallSubDelayed(Me, "KickSync")
 End Sub
 
+' Called synchronously as the app backgrounds, before the delayed KickSync.
+Public Sub NoteBackgroundSync
+	bgPending = True
+End Sub
+
+Public Sub CancelBackgroundHold
+	bgPending = False
+End Sub
+
 Public Sub KickSync
 	If syncRunning Then
 		syncAgain = True
 		Return
 	End If
+	bgPending = False
 	CallSubDelayed(Me, "RunSync")
 End Sub
 
@@ -187,9 +207,17 @@ Public Sub KickSyncAndPull
 	KickSync
 End Sub
 
+' Manual dashboard refresh. The pull stays on the async queue so iOS can keep sending saves.
+Public Sub RequestDashboardRefresh
+	refreshDash = True
+	KickSyncAndPull
+End Sub
+
 Private Sub RunSync
 	syncRunning = True
-	Do While True
+	Dim again As Boolean = True
+	Do While again
+		again = False
 		Dim tokenState As String = modSupabase.EnsureFreshToken
 		If tokenState = "rejected" Then
 			OpenLoginForRejectedSession
@@ -201,26 +229,49 @@ Private Sub RunSync
 		If matchJob.ContainsKey("id") Then
 			Wait For (SendMatchJob(matchJob)) Complete (okMatch As Boolean)
 			If okMatch = False Then Exit
+			again = True
 			Continue
 		End If
 		Dim evJob As Map = modLocal.NextEventSend
 		If evJob.ContainsKey("id") Then
 			Wait For (SendEventJob(evJob)) Complete (ok As Boolean)
 			If ok = False Then Exit
+			again = True
 			Continue
 		End If
 		If wantPull Then
 			wantPull = False
-			Wait For (PullServer) Complete (pulled As Boolean)
+			Wait For (PullServer) Complete (pullOk As Boolean)
+			If pullOk = False Then Log("PullServer: not completed")
+			didPull = True
 		End If
-		Exit
 	Loop
+	FinishSync
+End Sub
+
+Private Sub FinishSync
 	syncRunning = False
 	RefreshLiveFeed
-	If syncAgain Then
-		syncAgain = False
-		CallSubDelayed(Me, "KickSync")
+	' A background kick may still be queued. Ending the task here would suspend iOS before that POST.
+	If syncAgain Or bgPending Then
+		If syncAgain Then
+			syncAgain = False
+			CallSubDelayed(Me, "KickSync")
+		End If
+		Return
 	End If
+	If didPull Or refreshDash Then
+		didPull = False
+		Dim manual As Boolean = refreshDash
+		refreshDash = False
+		Try
+			CallSubDelayed(B4XPages.GetPage("Dashboard"), "Refresh")
+		Catch
+			Log("RefreshDashboard: " & LastException)
+		End Try
+		If manual Then modPlatform.ProgressHide
+	End If
+	modPlatform.EndBackgroundTask
 End Sub
 
 Private Sub SendEventJob(job As Map) As ResumableSub
@@ -336,7 +387,7 @@ Private Sub OpenLoginForRejectedSession
 	syncRunning = False
 	syncAgain = False
 	modSupabase.SignOut
-	ToastMessageShow("Please sign in again", True)
+	modPlatform.Toast("Please sign in again", True)
 	B4XPages.ShowPageAndRemovePreviousPages("Login")
 End Sub
 
